@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # 1. Relational Database (PostgreSQL 16)
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: npweb-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: namma_pavagada
+      POSTGRES_USER: np_admin
+      POSTGRES_PASSWORD: np_password_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U np_admin -d namma_pavagada"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # 2. Backend REST API (Flask + Gunicorn)
+  # ============================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/backend.Dockerfile
+    container_name: npweb-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      FLASK_ENV: development
+      PORT: 5000
+      DATABASE_URL: postgresql://np_admin:np_password_2026@postgres:5432/namma_pavagada
+      SECRET_KEY: npweb-docker-secret-key-pavagada-2026
+      JWT_SECRET_KEY: npweb-docker-jwt-secret-pvg-2026
+      AWS_REGION: ap-south-1
+      S3_BUCKET_NAME: namma-pavagada-media
+      S3_USE_LOCAL_FALLBACK: "True"
+      CORS_ORIGINS: "http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174"
+    ports:
+      - "5000:5000"
+    volumes:
+      - media_uploads:/app/uploads
+
+  # ============================================================================
+  # 3. Public Website Frontend
+  # ============================================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/frontend.Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:5000/api
+    container_name: npweb-public-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+  # ============================================================================
+  # 4. Admin Dashboard CMS
+  # ============================================================================
+  admin-frontend:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/admin-frontend.Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:5000/api
+    container_name: npweb-admin-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5174:80"
+
+volumes:
+  pgdata:
+  media_uploads:

@@ -1,0 +1,69 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Namma Pavagada - Amazon S3 Media Storage Bucket for Photos and Assets'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+
+  BucketName:
+    Type: String
+    Default: namma-pavagada-media
+    Description: Unique S3 bucket name for photographs and media assets.
+
+Resources:
+  MediaBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${BucketName}-${EnvironmentName}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST, DELETE, HEAD]
+            AllowedOrigins:
+              - 'http://localhost:5173'
+              - 'http://localhost:5174'
+              - 'https://nammapavagada.com'
+              - 'https://www.nammapavagada.com'
+              - 'https://admin.nammapavagada.com'
+            MaxAge: 3600
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-namma-pavagada-media'
+        - Key: Project
+          Value: NammaPavagada
+
+  MediaBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MediaBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadForMediaObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${MediaBucket}/*'
+
+Outputs:
+  BucketName:
+    Description: S3 Media Bucket Name
+    Value: !Ref MediaBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-NpMediaBucketName'
+
+  BucketDomainName:
+    Description: S3 Bucket Domain
+    Value: !GetAtt MediaBucket.RegionalDomainName
+    Export:
+      Name: !Sub '${EnvironmentName}-NpMediaBucketDomain'

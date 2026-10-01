@@ -1,0 +1,132 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Namma Pavagada - AWS App Runner Container Service for Backend REST API'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+
+  ImageUri:
+    Type: String
+    Description: 'ECR Container Image URI (e.g. 123456789012.dkr.ecr.ap-south-1.amazonaws.com/namma-pavagada-backend:latest)'
+
+  Cpu:
+    Type: String
+    Default: '1 vCPU'
+    AllowedValues: ['0.25 vCPU', '0.5 vCPU', '1 vCPU', '2 vCPU']
+
+  Memory:
+    Type: String
+    Default: '2 GB'
+    AllowedValues: ['0.5 GB', '1 GB', '2 GB', '3 GB', '4 GB']
+
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: 'PostgreSQL connection string from RDS stack'
+
+  JwtSecretKey:
+    Type: String
+    NoEcho: true
+    Description: 'Secret key for signing JWT tokens'
+
+Resources:
+  AppRunnerAccessRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'build.apprunner.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess'
+
+  AppRunnerInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'tasks.apprunner.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: S3MediaBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:DeleteObject'
+                  - 's3:PutObjectAcl'
+                Resource: !Sub 'arn:aws:s3:::namma-pavagada-media-${EnvironmentName}/*'
+
+  AppRunnerVpcConnector:
+    Type: AWS::AppRunner::VpcConnector
+    Properties:
+      VpcConnectorName: !Sub '${EnvironmentName}-np-backend-connector'
+      Subnets: !Split
+        - ','
+        - Fn::ImportValue: !Sub '${EnvironmentName}-NpPrivateSubnets'
+      SecurityGroups:
+        - Fn::ImportValue: !Sub '${EnvironmentName}-NpPublicSubnets'
+
+  BackendService:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-namma-pavagada-api'
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt AppRunnerAccessRole.Arn
+        AutoDeploymentsEnabled: true
+        ImageRepository:
+          ImageIdentifier: !Ref ImageUri
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: '5000'
+            RuntimeEnvironmentVariables:
+              - Name: FLASK_ENV
+                Value: !Ref EnvironmentName
+              - Name: PORT
+                Value: '5000'
+              - Name: DATABASE_URL
+                Value: !Ref DatabaseUrl
+              - Name: JWT_SECRET_KEY
+                Value: !Ref JwtSecretKey
+              - Name: AWS_REGION
+                Value: !Ref 'AWS::Region'
+              - Name: S3_BUCKET_NAME
+                Value: !Sub 'namma-pavagada-media-${EnvironmentName}'
+              - Name: S3_USE_LOCAL_FALLBACK
+                Value: 'False'
+      InstanceConfiguration:
+        Cpu: !Ref Cpu
+        Memory: !Ref Memory
+        InstanceRoleArn: !GetAtt AppRunnerInstanceRole.Arn
+      NetworkConfiguration:
+        EgressConfiguration:
+          EgressType: VPC
+          VpcConnectorArn: !GetAtt AppRunnerVpcConnector.VpcConnectorArn
+      HealthCheckConfiguration:
+        Path: /api/health
+        Protocol: HTTP
+        Interval: 20
+        Timeout: 5
+        HealthyThreshold: 2
+        UnhealthyThreshold: 3
+      Tags:
+        - Key: Project
+          Value: NammaPavagada
+
+Outputs:
+  ServiceUrl:
+    Description: Public HTTPS Endpoint for Backend REST API
+    Value: !GetAtt BackendService.ServiceUrl
+    Export:
+      Name: !Sub '${EnvironmentName}-NpBackendApiUrl'

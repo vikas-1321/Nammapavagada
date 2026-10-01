@@ -1,0 +1,165 @@
+import { TransitScheduleItem, CivicServiceContact, EmergencyContact } from '../types/service';
+
+export const TRANSIT_ROUTES: TransitScheduleItem[] = [
+  {
+    id: 'route-bengaluru-express',
+    routeCode: 'PVG-BLR-01',
+    source: 'Pavagada KSRTC Bus Station',
+    destination: 'Bengaluru (Kempegowda Bus Station / Majestic)',
+    via: ['Madhugiri', 'Koratagere', 'Tumakuru', 'Dabaspet', 'Nelamangala'],
+    operator: 'KSRTC',
+    frequencyNote: 'Regular services operating throughout the day (morning, afternoon, late evening)',
+    isTimetableLive: false,
+    statusNote: 'Realtime automated digital telemetry in development. Official corridor frequency is hourly during daylight hours.',
+  },
+  {
+    id: 'route-tumakuru-feeder',
+    routeCode: 'PVG-TMK-02',
+    source: 'Pavagada KSRTC Bus Station',
+    destination: 'Tumakuru Central Bus Stand',
+    via: ['Y.N. Hosakote', 'Madhugiri', 'Koratagere'],
+    operator: 'KSRTC',
+    frequencyNote: 'High frequency express & ordinary services (every 30 to 45 minutes)',
+    isTimetableLive: false,
+    statusNote: 'Standard district corridor. Realtime GPS tracking to be integrated with KSRTC Sarige portal.',
+  },
+  {
+    id: 'route-bellary-rayadurga',
+    routeCode: 'PVG-RYD-03',
+    source: 'Pavagada Bus Station',
+    destination: 'Rayadurga / Bellary (Andhra Pradesh & Karnataka border)',
+    via: ['Nagalamadike', 'Rayadurga'],
+    operator: 'APSRTC',
+    frequencyNote: 'Interstate border services operating every 60–90 minutes',
+    isTimetableLive: false,
+    statusNote: 'Joint interstate bilateral route operating under Karnataka-APSRTC reciprocal agreement.',
+  },
+  {
+    id: 'route-chitradurga-chalukya',
+    routeCode: 'PVG-CTA-04',
+    source: 'Pavagada Bus Station',
+    destination: 'Chitradurga Bus Terminal',
+    via: ['Parasurampura', 'Challakere'],
+    operator: 'KSRTC',
+    frequencyNote: 'Trips spaced through morning and afternoon hours',
+    isTimetableLive: false,
+    statusNote: 'Regional link connecting to NH 48 / NH 50 corridors.',
+  },
+  {
+    id: 'route-rayadurga-tumkur-railway',
+    routeCode: 'RAIL-SWR-01',
+    source: 'Rayadurga Junction',
+    destination: 'Tumakuru Junction (via Pavagada Station)',
+    via: ['Rayadurga', 'Pavagada', 'Madhugiri', 'Koratagere', 'Tumakuru'],
+    operator: 'INDIAN_RAILWAYS',
+    frequencyNote: 'Track and station civil infrastructure undergoing phased completion by South Western Railway',
+    isTimetableLive: false,
+    statusNote: 'New broad-gauge railway line project. Passenger train timetables will be published upon CRS safety clearance and formal commissioning.',
+  }
+];
+
+export const CIVIC_OFFICES: CivicServiceContact[] = [
+  {
+    id: 'civic-tmc',
+    department: 'Urban Local Body',
+    officeName: 'Town Municipal Council (ಪುರಸಭೆ) Pavagada',
+    contactNumber: '08136-244230',
+    address: 'Municipal Office Road, Opposite Post Office, Pavagada, Karnataka 561202',
+    workingHours: '10:00 AM – 05:30 PM (Mon–Sat, closed 2nd/4th Saturdays)',
+    keyServices: [
+      'Drinking water supply and sanitation oversight',
+      'Property tax assessment and E-Swathu issuance',
+      'Birth and Death certificate registration',
+      'Trade licenses and building plan approvals',
+    ],
+    verificationStatus: 'Verified Official',
+  },
+  {
+    id: 'civic-tahsildar',
+    department: 'Revenue & Taluk Administration',
+    officeName: 'Taluk Office / Mini Vidhana Soudha',
+    contactNumber: '08136-244225',
+    address: 'Mini Vidhana Soudha Complex, Court Road, Pavagada 561202',
+    workingHours: '10:00 AM – 05:30 PM (Mon–Sat)',
+    keyServices: [
+      'Revenue records, RTC (Bhoomi), Mutation records',
+      'Caste and Income certificate issuance',
+      'Drought and disaster relief administration',
+      'Election and voting franchise registry',
+    ],
+    verificationStatus: 'Verified Official',
+  },
+  {
+    id: 'civic-kspdcl',
+    department: 'Renewable Energy Coordination',
+    officeName: 'Pavagada Solar Park Project Office (KSPDCL)',
+    contactNumber: '080-22208888 (Central Helpline)',
+    address: 'Substation Complex, Tirumani, Pavagada Taluk, Karnataka 561202',
+    workingHours: '09:30 AM – 05:30 PM (Mon–Fri)',
+    keyServices: [
+      'Landowner lease payment coordination (₹21,000/acre/yr scheme)',
+      'Solar developer grid intertie oversight',
+      'Corporate Social Responsibility (CSR) local community programs',
+    ],
+    verificationStatus: 'Verified Official',
+  },
+  {
+    id: 'civic-police',
+    department: 'Home Affairs & Law Enforcement',
+    officeName: 'Pavagada Police Station',
+    contactNumber: '08136-244233 / 112',
+    address: 'Station Circle, Pavagada Town, Karnataka 561202',
+    workingHours: '24 Hours Daily (Patrol and Emergency Response)',
+    keyServices: [
+      'Public law and order maintenance',
+      'Emergency crime response (Dial 112)',
+      'Verification and citizen grievance redressal',
+    ],
+    verificationStatus: 'Verified Official',
+  }
+];
+
+export const EMERGENCY_CONTACTS: EmergencyContact[] = [
+  {
+    id: 'emg-all-emergency',
+    service: 'Unified Emergency Services (Police, Fire, Ambulance)',
+    telephone: '112',
+    operationalHours: '24/7 Toll Free Nationwide',
+    notes: 'Single emergency response support system (ERSS) across Karnataka.',
+  },
+  {
+    id: 'emg-medical-ambulance',
+    service: 'Arogya Kavacha Medical Ambulance',
+    telephone: '108',
+    operationalHours: '24/7 Toll Free',
+    notes: 'GPS-dispatched emergency ambulance service with direct link to Pavagada Taluk Hospital.',
+  },
+  {
+    id: 'emg-taluk-hospital',
+    service: 'Pavagada Taluk General Hospital Casualty',
+    telephone: '08136-244240',
+    operationalHours: '24/7 Casualty & Inpatient Desk',
+    notes: 'Direct landline to hospital emergency triage counter.',
+  },
+  {
+    id: 'emg-fire-rescue',
+    service: 'Fire & Emergency Rescue Services',
+    telephone: '101 / 08136-244101',
+    operationalHours: '24/7 Fire Station Desk',
+    notes: 'Located at Pavagada town station circle.',
+  },
+  {
+    id: 'emg-women-helpline',
+    service: 'Women in Distress Helpline',
+    telephone: '1091 / 181',
+    operationalHours: '24/7 Toll Free',
+    notes: 'Specialized assistance and counseling services.',
+  },
+  {
+    id: 'emg-child-helpline',
+    service: 'Childline Emergency Care',
+    telephone: '1098',
+    operationalHours: '24/7 Toll Free',
+    notes: 'Protection and support for children in need.',
+  }
+];

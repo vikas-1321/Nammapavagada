@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   NAMMA PAVAGADA DESIGN SYSTEM: HERITAGE × EXPLORER × COMMUNITY
+   Warm regional palette, readable editorial typography, tactile depth.
+   ========================================================================== */
+
+:root {
+  --color-warm-cream: #F7F3EA;
+  --color-forest-green: #1F3A2E;
+  --color-terracotta: #C65D3A;
+  --color-earth-brown: #7A5135;
+  --color-soft-sand: #E8DDCC;
+  --color-dark-text: #1C1C1C;
+  --font-sans: 'Plus Jakarta Sans', 'Inter', -apple-system, sans-serif;
+  --font-serif: 'Newsreader', Georgia, serif;
+  --font-kannada: 'Noto Sans Kannada', system-ui, sans-serif;
+}
+
+html {
+  font-family: var(--font-sans);
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-warm-cream);
+  color: var(--color-dark-text);
+}
+
+body {
+  background-color: var(--color-warm-cream);
+  color: var(--color-dark-text);
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Accessible focus ring in warm Terracotta */
+:focus-visible {
+  outline: 2px solid var(--color-terracotta) !important;
+  outline-offset: 2px !important;
+}
+
+/* Warm Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-warm-cream);
+  border-left: 1px solid var(--color-soft-sand);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-soft-sand);
+  border-radius: 9999px;
+  border: 2px solid var(--color-warm-cream);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-terracotta);
+}
+
+/* Leaflet Container Overrides: Warm, Rounded, Modern */
+.leaflet-container {
+  font-family: var(--font-sans) !important;
+  border-radius: 1rem !important;
+  background-color: #f2ede4 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 520px !important;
+  z-index: 10 !important;
+}
+
+/* Ensure Leaflet div-icons do not render default white box & grey borders */
+.leaflet-div-icon,
+.custom-map-pin {
+  background: transparent !important;
+  border: none !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #ffffff !important;
+  color: var(--color-dark-text) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 10px 25px -5px rgba(31, 58, 46, 0.15) !important;
+  border: 1px solid var(--color-soft-sand) !important;
+  padding: 2px !important;
+}
+
+.leaflet-popup-tip {
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px !important;
+  line-height: 1.5 !important;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: var(--color-forest-green) !important;
+  padding: 8px 8px 0 0 !important;
+  font-size: 16px !important;
+}
+
+.leaflet-bar {
+  border-radius: 0.5rem !important;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(31, 58, 46, 0.12) !important;
+  border: 1px solid var(--color-soft-sand) !important;
+}
+
+.leaflet-bar a {
+  background-color: #ffffff !important;
+  color: var(--color-forest-green) !important;
+  border-bottom: 1px solid var(--color-soft-sand) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: var(--color-warm-cream) !important;
+  color: var(--color-terracotta) !important;
+}
+
+/* Warm Map Tooltip for Marker Hovering */
+.warm-map-tooltip {
+  background: #1f3a2e !important;
+  color: #f7f3ea !important;
+  border: 1px solid #7a5135 !important;
+  border-radius: 9999px !important;
+  font-family: var(--font-sans) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  padding: 3px 8px !important;
+  box-shadow: 0 4px 12px rgba(31, 58, 46, 0.2) !important;
+}
+
+.warm-map-tooltip::before {
+  border-top-color: #1f3a2e !important;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

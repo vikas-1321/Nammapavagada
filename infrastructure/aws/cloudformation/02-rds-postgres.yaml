@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Namma Pavagada - Amazon RDS PostgreSQL Database Infrastructure (Free-Tier Eligible)'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+
+  DBInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    Description: Free-tier eligible RDS instance class (db.t4g.micro or db.t3.micro).
+
+  DBAllocatedStorage:
+    Type: Number
+    Default: 20
+    Description: Storage in GB (20 GB is within AWS Free Tier).
+
+  DBName:
+    Type: String
+    Default: namma_pavagada
+
+  DBMasterUsername:
+    Type: String
+    Default: np_admin
+
+  DBMasterPassword:
+    Type: String
+    NoEcho: true
+    Description: Master password for database superuser.
+
+  MultiAZ:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enable high-availability Multi-AZ failover (incurs cost if not in free-tier test).
+
+Resources:
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound PostgreSQL access from Backend API
+      VpcId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-NpVpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 10.0.0.0/16 # Allow traffic from VPC subnets
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-np-rds-sg'
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnets for Namma Pavagada RDS
+      SubnetIds: !Split
+        - ','
+        - Fn::ImportValue: !Sub '${EnvironmentName}-NpPrivateSubnets'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-np-db-subnet-group'
+
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      Engine: postgres
+      EngineVersion: '16.3'
+      DBInstanceClass: !Ref DBInstanceClass
+      AllocatedStorage: !Ref DBAllocatedStorage
+      StorageType: gp3
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      MultiAZ: !Ref MultiAZ
+      PubliclyAccessible: false
+      AutoMinorVersionUpgrade: true
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '20:00-21:00'
+      StorageEncrypted: true
+      DeletionProtection: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-namma-pavagada-rds'
+        - Key: Project
+          Value: NammaPavagada
+
+Outputs:
+  RDSEndpoint:
+    Description: RDS PostgreSQL Connection Endpoint
+    Value: !GetAtt RDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${EnvironmentName}-NpRdsEndpoint'
+
+  RDSPort:
+    Description: Database Port
+    Value: !GetAtt RDSInstance.Endpoint.Port
+    Export:
+      Name: !Sub '${EnvironmentName}-NpRdsPort'
+
+  DatabaseURLFormat:
+    Description: SQLAlchemy connection string format
+    Value: !Sub 'postgresql://${DBMasterUsername}:PASSWORD@\${${EnvironmentName}-NpRdsEndpoint}:${RDSPort}/${DBName}'

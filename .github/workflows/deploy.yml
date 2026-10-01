@@ -1,0 +1,53 @@
+name: CI/CD Pipeline - Namma Pavagada
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-backend:
+    name: Backend Pytest & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Backend Tests
+        run: |
+          cd backend
+          pytest -v
+
+  build-frontends:
+    name: Build Public & Admin Frontends
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build Public Website
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Build Admin CMS
+        run: |
+          cd admin-frontend
+          npm ci
+          npm run build
