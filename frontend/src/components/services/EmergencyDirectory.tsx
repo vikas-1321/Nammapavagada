@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { EmergencyContact } from '../../types/service';
 
 export interface EmergencyDirectoryProps {
@@ -10,7 +11,7 @@ export const EmergencyDirectory: React.FC<EmergencyDirectoryProps> = ({ contacts
     <div className="space-y-6">
       <div className="border-l-4 border-terracotta bg-white p-5 rounded-r-2xl border border-soft-sand shadow-sm">
         <span className="text-xs uppercase font-bold tracking-wider text-terracotta block mb-1 flex items-center gap-1.5">
-          <span>🚨</span>
+          <AlertTriangle className="w-4 h-4 text-terracotta shrink-0" />
           <span>Emergency First Response Network · Pavagada Taluk</span>
         </span>
         <p className="text-xs md:text-sm text-muted-text leading-relaxed font-sans">

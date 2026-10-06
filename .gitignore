@@ -12,13 +12,15 @@ dist
 dist-ssr
 *.local
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+# Environment and secrets
+.env
+*.env
+*.env.*
+
+# Python caches and local DB
+__pycache__/
+*.py[cod]
+*$py.class
+*.db
+instance/
+backend/instance/

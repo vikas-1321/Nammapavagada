@@ -58,4 +58,6 @@ export interface LocationDetail extends BaseLocation {
   keyAttributes: { label: string; value: string }[];
   verifiedSource: string;
   isPdfAuthoritative: boolean;
+  primaryPhotoUrl?: string;
+  status?: string;
 }

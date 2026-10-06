@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -76,10 +77,11 @@ export const Modal: React.FC<ModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 bg-white hover:bg-terracotta text-forest-green hover:text-white text-xs font-bold px-3 py-2 rounded-lg border border-soft-sand hover:border-terracotta transition-colors duration-150 shadow-sm"
+            className="shrink-0 inline-flex items-center gap-1.5 bg-white hover:bg-terracotta text-forest-green hover:text-white text-xs font-bold px-3 py-2 rounded-lg border border-soft-sand hover:border-terracotta transition-colors duration-150 shadow-sm cursor-pointer"
             aria-label="Close modal"
           >
-            Close ✕
+            <span>Close</span>
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
 

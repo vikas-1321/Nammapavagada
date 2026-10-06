@@ -9,17 +9,22 @@ import { LocationsPage } from './pages/LocationsPage';
 import { ServicesPage } from './pages/ServicesPage';
 import { MapPage } from './pages/MapPage';
 import { AboutPage } from './pages/AboutPage';
+import { Home, Compass, Landmark, HeartPulse, Map } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<PageRoute>('home');
 
-  // Sync hash routing if present
+  // Sync hash routing if present (supports base routes as well as community subroutes like #community/hospitals)
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '') as PageRoute;
+      const rawHash = window.location.hash.replace('#', '').trim();
+      const [baseRoute] = rawHash.split('/');
       const validRoutes: PageRoute[] = ['home', 'about', 'history', 'places', 'locations', 'services', 'map'];
-      if (validRoutes.includes(hash)) {
-        setCurrentRoute(hash);
+      
+      if (baseRoute === 'community' || baseRoute === 'services') {
+        setCurrentRoute('services');
+      } else if (validRoutes.includes(baseRoute as PageRoute)) {
+        setCurrentRoute(baseRoute as PageRoute);
       }
     };
 
@@ -30,7 +35,7 @@ export const App: React.FC = () => {
 
   const handleRouteChange = (route: PageRoute) => {
     setCurrentRoute(route);
-    window.location.hash = route;
+    window.location.hash = route === 'services' ? 'community' : route;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -72,7 +77,7 @@ export const App: React.FC = () => {
             currentRoute === 'home' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
           }`}
         >
-          <span className="text-base leading-none">🏠</span>
+          <Home className="w-4 h-4" />
           <span>Home</span>
         </button>
 
@@ -82,7 +87,7 @@ export const App: React.FC = () => {
             currentRoute === 'locations' || currentRoute === 'places' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
           }`}
         >
-          <span className="text-base leading-none">🧭</span>
+          <Compass className="w-4 h-4" />
           <span>Explore</span>
         </button>
 
@@ -92,7 +97,7 @@ export const App: React.FC = () => {
             currentRoute === 'history' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
           }`}
         >
-          <span className="text-base leading-none">🏛️</span>
+          <Landmark className="w-4 h-4" />
           <span>Heritage</span>
         </button>
 
@@ -102,7 +107,7 @@ export const App: React.FC = () => {
             currentRoute === 'services' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
           }`}
         >
-          <span className="text-base leading-none">🏥</span>
+          <HeartPulse className="w-4 h-4" />
           <span>Community</span>
         </button>
 
@@ -112,7 +117,7 @@ export const App: React.FC = () => {
             currentRoute === 'map' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
           }`}
         >
-          <span className="text-base leading-none">🗺️</span>
+          <Map className="w-4 h-4" />
           <span>Map</span>
         </button>
       </nav>

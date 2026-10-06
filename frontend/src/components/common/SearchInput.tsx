@@ -1,4 +1,5 @@
 import React from 'react';
+import { Search, X } from 'lucide-react';
 
 export interface SearchInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -28,14 +29,12 @@ export const SearchInput: React.FC<SearchInputProps> = ({
         </label>
       )}
       <div className="relative flex items-center">
-        {/* Search Glyph */}
-        <div
+        {/* Search Icon */}
+        <Search
           className={`absolute left-3.5 text-forest-green/60 select-none pointer-events-none ${
-            compact ? 'text-sm' : 'text-base'
+            compact ? 'w-4 h-4' : 'w-5 h-5'
           }`}
-        >
-          🔍
-        </div>
+        />
         <input
           type="text"
           value={value}
@@ -52,13 +51,15 @@ export const SearchInput: React.FC<SearchInputProps> = ({
           <button
             type="button"
             onClick={onClear}
-            className="absolute right-2.5 text-[11px] font-semibold text-muted-text hover:text-terracotta px-2 py-0.5 rounded-md bg-warm-cream hover:bg-soft-sand transition-colors cursor-pointer"
+            className="absolute right-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-muted-text hover:text-terracotta px-2 py-0.5 rounded-md bg-warm-cream hover:bg-soft-sand transition-colors cursor-pointer"
             aria-label="Clear search input"
           >
-            Clear ✕
+            <span>Clear</span>
+            <X className="w-3 h-3" />
           </button>
         )}
       </div>
     </div>
   );
 };
+

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { PageRoute } from '../../types/navigation';
+import { Search, Menu, X } from 'lucide-react';
 
 export interface NavbarProps {
   currentRoute: PageRoute;
@@ -103,11 +104,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onRouteChange }) =
           {/* Quick Search Shortcut Button */}
           <button
             onClick={() => handleNavClick('locations')}
-            className="ml-3 p-2.5 rounded-lg border border-soft-sand text-forest-green hover:bg-warm-cream hover:border-terracotta hover:text-terracotta transition-colors shadow-sm"
+            className="ml-3 p-2.5 rounded-lg border border-soft-sand text-forest-green hover:bg-warm-cream hover:border-terracotta hover:text-terracotta transition-colors shadow-sm cursor-pointer"
             title="Search Places in Pavagada"
             aria-label="Search places"
           >
-            🔍
+            <Search className="w-4 h-4" />
           </button>
         </nav>
 
@@ -116,11 +117,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onRouteChange }) =
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2.5 rounded-lg border border-soft-sand bg-warm-cream text-forest-green hover:bg-soft-sand transition-colors font-semibold text-sm flex items-center gap-1.5"
+            className="p-2.5 rounded-lg border border-soft-sand bg-warm-cream text-forest-green hover:bg-soft-sand transition-colors font-semibold text-sm flex items-center gap-1.5 cursor-pointer"
             aria-expanded={isMobileMenuOpen}
             aria-label="Toggle navigation menu"
           >
-            <span>{isMobileMenuOpen ? '✕' : '☰'}</span>
+            {isMobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             <span className="text-xs uppercase tracking-wider font-bold">
               {isMobileMenuOpen ? 'Close' : 'Menu'}
             </span>

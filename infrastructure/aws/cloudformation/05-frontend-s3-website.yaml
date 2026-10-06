@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Namma Pavagada - S3 Static Website Hosting for Public & Admin Frontends (Works without CloudFront account restrictions)'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+
+Resources:
+  # ============================================================================
+  # 1. PUBLIC FRONTEND S3 WEBSITE
+  # ============================================================================
+  PublicWebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'namma-pavagada-public-web-${EnvironmentName}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-np-public-website'
+        - Key: Project
+          Value: NammaPavagada
+
+  PublicBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PublicWebsiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${PublicWebsiteBucket}/*'
+
+  # ============================================================================
+  # 2. ADMIN FRONTEND S3 WEBSITE
+  # ============================================================================
+  AdminWebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'namma-pavagada-admin-web-${EnvironmentName}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-np-admin-website'
+        - Key: Project
+          Value: NammaPavagada
+
+  AdminBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AdminWebsiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub 'arn:aws:s3:::${AdminWebsiteBucket}/*'
+
+Outputs:
+  PublicWebsiteUrl:
+    Description: 'Public Website Endpoint'
+    Value: !GetAtt PublicWebsiteBucket.WebsiteURL
+    Export:
+      Name: !Sub '${EnvironmentName}-NpPublicWebsiteUrl'
+
+  AdminWebsiteUrl:
+    Description: 'Admin CMS Website Endpoint'
+    Value: !GetAtt AdminWebsiteBucket.WebsiteURL
+    Export:
+      Name: !Sub '${EnvironmentName}-NpAdminWebsiteUrl'
+
+  PublicWebsiteBucketName:
+    Description: 'Public S3 Bucket Name'
+    Value: !Ref PublicWebsiteBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-NpPublicBucketName'
+
+  AdminWebsiteBucketName:
+    Description: 'Admin S3 Bucket Name'
+    Value: !Ref AdminWebsiteBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-NpAdminBucketName'

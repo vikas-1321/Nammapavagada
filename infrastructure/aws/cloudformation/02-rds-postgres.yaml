@@ -67,7 +67,7 @@ Resources:
     Properties:
       DBName: !Ref DBName
       Engine: postgres
-      EngineVersion: '16.3'
+      EngineVersion: '16.9'
       DBInstanceClass: !Ref DBInstanceClass
       AllocatedStorage: !Ref DBAllocatedStorage
       StorageType: gp3
@@ -79,10 +79,10 @@ Resources:
       MultiAZ: !Ref MultiAZ
       PubliclyAccessible: false
       AutoMinorVersionUpgrade: true
-      BackupRetentionPeriod: 7
+      BackupRetentionPeriod: 1
       PreferredBackupWindow: '20:00-21:00'
       StorageEncrypted: true
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-namma-pavagada-rds'
@@ -104,4 +104,4 @@ Outputs:
 
   DatabaseURLFormat:
     Description: SQLAlchemy connection string format
-    Value: !Sub 'postgresql://${DBMasterUsername}:PASSWORD@\${${EnvironmentName}-NpRdsEndpoint}:${RDSPort}/${DBName}'
+    Value: !Sub 'postgresql://${DBMasterUsername}:PASSWORD@${RDSInstance.Endpoint.Address}:5432/${DBName}'

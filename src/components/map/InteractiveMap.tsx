@@ -6,6 +6,18 @@ import { locationService } from '../../services/locationService';
 import { formatCoordinates } from '../../utils/formatting';
 import { CATEGORY_REGISTRY } from '../../data/categoriesData';
 import { LocationDetailModal } from '../locations/LocationDetailModal';
+import {
+  Map as MapIcon,
+  Compass,
+  Globe2,
+  Crosshair,
+  RotateCcw,
+  Search,
+  Layers,
+  MapPin,
+  ChevronDown,
+  Mountain,
+} from 'lucide-react';
 
 // Fix Leaflet default icon asset paths in Vite / bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -15,19 +27,9 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-type BaseMapStyle = 'editorial' | 'osm' | 'satellite';
+type BaseMapStyle = 'osm' | 'satellite' | 'terrain';
 
-const TILE_LAYERS: Record<BaseMapStyle, { url: string; options: L.TileLayerOptions; label: string; icon: string }> = {
-  editorial: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    options: {
-      maxZoom: 19,
-      subdomains: 'abcd',
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-    },
-    label: 'Atlas',
-    icon: '🗺️',
-  },
+const TILE_LAYERS: Record<BaseMapStyle, { url: string; options: L.TileLayerOptions; label: string }> = {
   osm: {
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     options: {
@@ -35,7 +37,6 @@ const TILE_LAYERS: Record<BaseMapStyle, { url: string; options: L.TileLayerOptio
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     },
     label: 'Street',
-    icon: '🧭',
   },
   satellite: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
@@ -44,7 +45,14 @@ const TILE_LAYERS: Record<BaseMapStyle, { url: string; options: L.TileLayerOptio
       attribution: '&copy; Esri, Maxar, Earthstar Geographics',
     },
     label: 'Satellite',
-    icon: '🛰️',
+  },
+  terrain: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    options: {
+      maxZoom: 18,
+      attribution: '&copy; Esri, HERE, Garmin, USGS',
+    },
+    label: 'Terrain',
   },
 };
 
@@ -63,7 +71,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState<LocationDetail | null>(initialSelectedLocation || null);
   const [detailModalLocation, setDetailModalLocation] = useState<LocationDetail | null>(null);
-  const [baseStyle, setBaseStyle] = useState<BaseMapStyle>('editorial');
+  const [baseStyle, setBaseStyle] = useState<BaseMapStyle>('osm');
   const [isMapReady, setIsMapReady] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
@@ -176,32 +184,46 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
       const isHeritage = loc.category === 'FORT_HERITAGE' || loc.category === 'MEGALITHIC_SITE';
       const isReligious = loc.category === 'RELIGIOUS';
 
-      // Category Icon
-      const iconEmoji = isSolar ? '⚡' : isHeritage ? '🏰' : isReligious ? '🛕' : '📍';
-
-      // Visual color token
-      const badgeBg = isSelected
-        ? 'bg-[#C65D3A] text-white ring-4 ring-[#C65D3A]/40 shadow-xl'
-        : isSolar
-        ? 'bg-[#C65D3A] text-white ring-2 ring-white shadow-md'
+      // Category SVG Icon
+      const iconSvg = isSolar
+        ? '<svg class="w-3 h-3 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>'
         : isHeritage
-        ? 'bg-[#7A5135] text-white ring-2 ring-white shadow-md'
+        ? '<svg class="w-3 h-3 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2l9 4.5v5.5c0 5-3.5 9.5-9 11-5.5-1.5-9-6-9-11V6.5L12 2z"/></svg>'
         : isReligious
-        ? 'bg-[#1F3A2E] text-white ring-2 ring-white shadow-md'
-        : 'bg-[#1F3A2E] text-white ring-2 ring-white shadow-md';
+        ? '<svg class="w-3 h-3 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v18m-9-9h18"/></svg>'
+        : '<svg class="w-3 h-3 inline-block" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>';
 
-      const shortName = loc.name.length > 18 ? loc.name.substring(0, 16) + '…' : loc.name;
+      // Visual color token for map pin badge
+      const pinBorder = isSelected
+        ? 'border-2 border-[#C65D3A] ring-2 ring-[#C65D3A]/40 shadow-xl'
+        : isSolar
+        ? 'border border-[#C65D3A]/70 shadow-md'
+        : isHeritage
+        ? 'border border-[#7A5135]/70 shadow-md'
+        : 'border border-slate-300 shadow-md';
 
-      // Custom divIcon with zero wrapper boundary artifacts
+      const iconBg = isSelected
+        ? 'bg-[#C65D3A] text-white'
+        : isSolar
+        ? 'bg-[#C65D3A] text-white'
+        : isHeritage
+        ? 'bg-[#7A5135] text-white'
+        : 'bg-[#1F3A2E] text-white';
+
+      const pointerBg = isSelected ? 'bg-[#C65D3A]' : 'bg-white border-b border-r border-slate-300';
+
+      const shortName = loc.name.length > 20 ? loc.name.substring(0, 18) + '…' : loc.name;
+
+      // Custom divIcon with crisp white pill badge and black location name
       const customIcon = L.divIcon({
         className: 'custom-map-pin !bg-transparent !border-0',
         html: `
           <div class="relative group cursor-pointer" style="transform: translate(-50%, -100%);">
-            <div class="${badgeBg} px-2.5 py-1 rounded-full text-[11px] font-sans font-bold whitespace-nowrap flex items-center gap-1.5 transition-transform duration-200 group-hover:scale-105 select-none">
-              <span class="text-xs leading-none">${iconEmoji}</span>
-              <span class="tracking-normal font-medium">${shortName}</span>
+            <div class="bg-white text-black ${pinBorder} px-2.5 py-1 rounded-full text-[11px] font-sans font-bold whitespace-nowrap flex items-center gap-1.5 transition-transform duration-200 group-hover:scale-105 select-none shadow-md">
+              <span class="w-4 h-4 rounded-full ${iconBg} flex items-center justify-center p-0.5 text-white shrink-0">${iconSvg}</span>
+              <span class="tracking-normal font-bold text-black">${shortName}</span>
             </div>
-            <div class="w-2.5 h-2.5 ${isSelected ? 'bg-[#C65D3A]' : 'bg-[#1F3A2E]'} rotate-45 mx-auto -mt-1 rounded-[1px] shadow-sm border border-white/50"></div>
+            <div class="w-2.5 h-2.5 ${pointerBg} rotate-45 mx-auto -mt-1 rounded-[1px] shadow-xs"></div>
           </div>
         `,
         iconSize: [0, 0],
@@ -222,11 +244,14 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
               ${loc.category.replace('_', ' ')}
             </span>
           </div>
-          <h4 class="font-serif font-bold text-sm text-forest-green leading-snug mb-0.5">${loc.name}</h4>
+          <h4 class="font-serif font-bold text-sm text-black leading-snug mb-0.5">${loc.name}</h4>
           ${loc.kannadaName ? `<div class="text-[11px] font-kannada text-earth-brown mb-1.5">${loc.kannadaName}</div>` : ''}
           <p class="text-dark-text/80 text-[11px] leading-relaxed mb-2 line-clamp-3">${loc.summary}</p>
           <div class="font-mono text-[10px] text-forest-green bg-warm-cream p-1.5 rounded border border-soft-sand flex items-center justify-between mb-2.5">
-            <span>📍 ${formatCoordinates(loc.coordinates.latitude, loc.coordinates.longitude)}</span>
+            <span class="flex items-center gap-1">
+              <svg class="w-3 h-3 text-terracotta shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              <span>${formatCoordinates(loc.coordinates.latitude, loc.coordinates.longitude)}</span>
+            </span>
             ${loc.coordinates.elevationMeters ? `<span>${loc.coordinates.elevationMeters}m MSL</span>` : ''}
           </div>
           <button
@@ -318,7 +343,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
         <div className="grid grid-cols-12 gap-3 items-center">
           {/* Search box */}
           <div className="col-span-12 md:col-span-7 lg:col-span-8 relative">
-            <span className="absolute left-3.5 top-2.5 text-forest-green/60 text-sm">🔍</span>
+            <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-forest-green/60" />
             <input
               type="text"
               value={searchQuery}
@@ -337,7 +362,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
               aria-label="Filter map by category"
             >
               <div className="flex items-center gap-1.5 truncate">
-                <span className="text-sm shrink-0">📂</span>
+                <Layers className="w-4 h-4 text-forest-green/80 shrink-0" />
                 <span className="truncate font-medium">
                   {activeCategory === 'ALL'
                     ? 'All Categories'
@@ -348,7 +373,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
                 <span className="font-mono text-[10px] bg-forest-green text-white font-bold px-1.5 py-0.2 rounded-full">
                   {filteredLocations.length}
                 </span>
-                <span className={`text-[10px] text-muted-text transition-transform duration-200 ${isCategoryOpen ? 'rotate-180' : ''}`}>▼</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-muted-text transition-transform duration-200 ${
+                    isCategoryOpen ? 'rotate-180' : ''
+                  }`}
+                />
               </div>
             </button>
 
@@ -412,20 +441,22 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
             {/* Quick Action Buttons (Fit Bounds, Recenter, Style Switcher) */}
             <div className="flex items-center gap-1.5 pointer-events-auto bg-white/90 backdrop-blur-md p-1 rounded-xl border border-soft-sand shadow-md">
               {/* Style Switcher */}
-              {(['editorial', 'osm', 'satellite'] as BaseMapStyle[]).map((style) => (
+              {(['osm', 'satellite', 'terrain'] as BaseMapStyle[]).map((style) => (
                 <button
                   key={style}
                   type="button"
                   onClick={() => setBaseStyle(style)}
                   title={`Switch to ${TILE_LAYERS[style].label} map`}
-                  className={`text-[11px] font-semibold px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                     baseStyle === style
                       ? 'bg-forest-green text-white shadow-xs'
                       : 'text-dark-text hover:bg-warm-cream'
                   }`}
                 >
-                  <span>{TILE_LAYERS[style].icon}</span>
-                  <span className="hidden sm:inline">{TILE_LAYERS[style].label}</span>
+                  {style === 'osm' && <Compass className="w-3.5 h-3.5" />}
+                  {style === 'satellite' && <Globe2 className="w-3.5 h-3.5" />}
+                  {style === 'terrain' && <Mountain className="w-3.5 h-3.5" />}
+                  <span>{TILE_LAYERS[style].label}</span>
                 </button>
               ))}
 
@@ -438,7 +469,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
                 title="Fit all landmarks within screen"
                 className="text-[11px] font-semibold px-2 py-1 rounded-lg text-forest-green hover:bg-warm-cream transition-colors cursor-pointer flex items-center gap-1"
               >
-                <span>🎯</span>
+                <Crosshair className="w-3.5 h-3.5" />
                 <span className="hidden md:inline">Fit All</span>
               </button>
 
@@ -449,7 +480,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
                 title="Center on Pavagada Hill Fort"
                 className="text-[11px] font-semibold px-2 py-1 rounded-lg text-forest-green hover:bg-warm-cream transition-colors cursor-pointer flex items-center gap-1"
               >
-                <span>📍</span>
+                <RotateCcw className="w-3.5 h-3.5" />
                 <span className="hidden md:inline">Reset</span>
               </button>
             </div>
@@ -533,7 +564,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
                       </span>
                     </div>
 
-                    <h4 className="text-sm font-serif font-bold text-forest-green leading-snug">
+                    <h4 className="text-sm font-serif font-bold text-black leading-snug">
                       {loc.name}
                     </h4>
                     {loc.kannadaName && (
@@ -542,7 +573,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
 
                     <div className="font-mono text-[11px] text-muted-text mt-1.5 flex items-center justify-between">
                       <span className="flex items-center gap-1">
-                        <span className="text-terracotta">📍</span>
+                        <MapPin className="w-3 h-3 text-terracotta shrink-0" />
                         <span>{formatCoordinates(loc.coordinates.latitude, loc.coordinates.longitude)}</span>
                       </span>
                       {loc.coordinates.elevationMeters && (

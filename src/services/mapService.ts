@@ -1,5 +1,6 @@
 import { LocationDetail } from '../types/location';
 import { locationService } from './locationService';
+import { apiClient } from './apiClient';
 
 export interface MapMarkerData {
   id: string;
@@ -8,6 +9,7 @@ export interface MapMarkerData {
   coordinates: [number, number];
   summary: string;
   elevationMeters?: number;
+  primaryPhotoUrl?: string;
 }
 
 class MapService {
@@ -26,8 +28,21 @@ class MapService {
       category: loc.category,
       coordinates: [loc.coordinates.latitude, loc.coordinates.longitude],
       summary: loc.summary,
-      elevationMeters: loc.coordinates.elevationMeters
+      elevationMeters: loc.coordinates.elevationMeters,
+      primaryPhotoUrl: loc.primaryPhotoUrl,
     }));
+  }
+
+  public async getMarkersAsync(categoryFilter?: string, query?: string): Promise<MapMarkerData[]> {
+    const remoteMarkers = await apiClient.get<MapMarkerData[]>('/locations/map/markers', {
+      category: categoryFilter !== 'ALL' ? categoryFilter : undefined,
+      q: query,
+    });
+
+    if (remoteMarkers && Array.isArray(remoteMarkers) && remoteMarkers.length > 0) {
+      return remoteMarkers;
+    }
+    return this.getMarkers(categoryFilter, query);
   }
 
   /**

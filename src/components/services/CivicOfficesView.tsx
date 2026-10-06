@@ -1,6 +1,7 @@
 import React from 'react';
 import { CivicServiceContact } from '../../types/service';
 import { Badge } from '../common/Badge';
+import { MapPin, Phone } from 'lucide-react';
 
 export interface CivicOfficesViewProps {
   offices: CivicServiceContact[];
@@ -28,10 +29,10 @@ export const CivicOfficesView: React.FC<CivicOfficesViewProps> = ({ offices }) =
               {office.officeName}
             </h4>
 
-            <p className="text-xs text-dark-text/80 mb-4 bg-warm-cream/60 p-3 rounded-xl border border-soft-sand font-mono flex items-start gap-2">
-              <span className="text-terracotta">📍</span>
+            <div className="text-xs text-dark-text/80 mb-4 bg-warm-cream/60 p-3 rounded-xl border border-soft-sand font-mono flex items-start gap-2">
+              <MapPin className="w-3.5 h-3.5 text-terracotta shrink-0 mt-0.5" />
               <span>{office.address}</span>
-            </p>
+            </div>
 
             <div className="space-y-1.5 mb-4">
               <span className="text-[11px] uppercase tracking-wider font-bold text-forest-green block">
@@ -56,9 +57,10 @@ export const CivicOfficesView: React.FC<CivicOfficesViewProps> = ({ offices }) =
             {office.contactNumber && (
               <a
                 href={`tel:${office.contactNumber.replace(/[^0-9]/g, '')}`}
-                className="font-mono font-bold text-terracotta hover:underline bg-warm-cream px-3 py-1 rounded-lg border border-soft-sand"
+                className="inline-flex items-center gap-1.5 font-mono font-bold text-terracotta hover:underline bg-warm-cream px-3 py-1 rounded-lg border border-soft-sand"
               >
-                📞 {office.contactNumber}
+                <Phone className="w-3 h-3" />
+                <span>{office.contactNumber}</span>
               </a>
             )}
           </div>

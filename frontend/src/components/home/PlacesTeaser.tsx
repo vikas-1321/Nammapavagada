@@ -5,6 +5,7 @@ import { Button } from '../common/Button';
 import { locationService } from '../../services/locationService';
 import { LocationCard } from '../locations/LocationCard';
 import { LocationDetail } from '../../types/location';
+import { Search } from 'lucide-react';
 
 export interface PlacesTeaserProps {
   onRouteChange: (route: PageRoute) => void;
@@ -54,7 +55,7 @@ export const PlacesTeaser: React.FC<PlacesTeaserProps> = ({
       <div className="bg-white border border-soft-sand rounded-2xl p-6 mb-10 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="relative flex-1">
-            <span className="absolute left-4 top-3.5 text-forest-green/60 text-base">🔍</span>
+            <Search className="absolute left-4 top-3.5 text-forest-green/60 w-5 h-5 pointer-events-none" />
             <input
               type="text"
               value={quickQuery}

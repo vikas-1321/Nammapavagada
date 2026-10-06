@@ -3,6 +3,7 @@ import { LocationDetail } from '../../types/location';
 import { Badge } from '../common/Badge';
 import { formatCoordinates, formatElevation } from '../../utils/formatting';
 import { CATEGORY_REGISTRY } from '../../data/categoriesData';
+import { MapPin } from 'lucide-react';
 
 export interface LocationCardProps {
   location: LocationDetail;
@@ -57,7 +58,7 @@ export const LocationCard: React.FC<LocationCardProps> = ({
           {/* Spatial Coordinates & Location Pin */}
           <div className="font-mono text-xs text-forest-green bg-warm-cream/80 border border-soft-sand rounded-lg px-3 py-2 mb-4 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 truncate">
-              <span className="text-terracotta">📍</span>
+              <MapPin className="w-3.5 h-3.5 text-terracotta shrink-0" />
               <span>{formatCoordinates(location.coordinates.latitude, location.coordinates.longitude)}</span>
             </span>
             <span className="text-muted-text shrink-0 text-[11px]">

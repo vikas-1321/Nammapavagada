@@ -1,0 +1,178 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Namma Pavagada - Amazon ECS Fargate Serverless Backend Container (Native to ap-south-1 Mumbai)'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+
+  ImageUri:
+    Type: String
+    Description: 'ECR Container Image URI'
+
+  DatabaseUrl:
+    Type: String
+    NoEcho: true
+    Description: 'PostgreSQL connection string from RDS'
+
+  JwtSecretKey:
+    Type: String
+    NoEcho: true
+    Description: 'Secret key for signing JWT tokens'
+
+Resources:
+  # ============================================================================
+  # 1. ECS CLUSTER & SECURITY
+  # ============================================================================
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub '${EnvironmentName}-namma-pavagada-cluster'
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-namma-pavagada-cluster'
+        - Key: Project
+          Value: NammaPavagada
+
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow inbound HTTP traffic on port 5000 for Flask API
+      VpcId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-NpVpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5000
+          ToPort: 5000
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-np-ecs-sg'
+
+  # IAM Execution Role for ECS Fargate to pull from ECR
+  EcsTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentName}-np-ecs-execution-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'ecs-tasks.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+
+  # IAM Task Role for application to access S3 media bucket
+  EcsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${EnvironmentName}-np-ecs-task-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'ecs-tasks.amazonaws.com'
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: S3MediaBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::namma-pavagada-media-${EnvironmentName}'
+                  - !Sub 'arn:aws:s3:::namma-pavagada-media-${EnvironmentName}/*'
+
+  # CloudWatch Log Group for container logs
+  EcsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${EnvironmentName}-namma-pavagada-backend'
+      RetentionInDays: 7
+
+  # ============================================================================
+  # 2. ECS TASK DEFINITION
+  # ============================================================================
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EnvironmentName}-np-backend-task'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt EcsTaskRole.Arn
+      ContainerDefinitions:
+        - Name: backend
+          Image: !Ref ImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: 5000
+              Protocol: tcp
+          Environment:
+            - Name: FLASK_ENV
+              Value: !Ref EnvironmentName
+            - Name: PORT
+              Value: '5000'
+            - Name: DATABASE_URL
+              Value: !Ref DatabaseUrl
+            - Name: JWT_SECRET_KEY
+              Value: !Ref JwtSecretKey
+            - Name: AWS_REGION
+              Value: !Ref 'AWS::Region'
+            - Name: S3_BUCKET_NAME
+              Value: !Sub 'namma-pavagada-media-${EnvironmentName}'
+            - Name: S3_USE_LOCAL_FALLBACK
+              Value: 'False'
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref EcsLogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: backend
+
+  # ============================================================================
+  # 3. ECS FARGATE SERVICE
+  # ============================================================================
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub '${EnvironmentName}-np-backend-service'
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      DesiredCount: 1
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets: !Split
+            - ','
+            - Fn::ImportValue: !Sub '${EnvironmentName}-NpPublicSubnets'
+          SecurityGroups:
+            - !Ref EcsSecurityGroup
+
+Outputs:
+  ClusterName:
+    Description: ECS Cluster Name
+    Value: !Ref EcsCluster
+    Export:
+      Name: !Sub '${EnvironmentName}-NpEcsClusterName'
+
+  ServiceName:
+    Description: ECS Service Name
+    Value: !GetAtt EcsService.Name
+    Export:
+      Name: !Sub '${EnvironmentName}-NpEcsServiceName'

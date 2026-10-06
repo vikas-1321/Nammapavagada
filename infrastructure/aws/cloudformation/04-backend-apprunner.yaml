@@ -67,6 +67,19 @@ Resources:
                   - 's3:PutObjectAcl'
                 Resource: !Sub 'arn:aws:s3:::namma-pavagada-media-${EnvironmentName}/*'
 
+  AppRunnerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Outbound security group for App Runner VPC Connector
+      VpcId:
+        Fn::ImportValue: !Sub '${EnvironmentName}-NpVpcId'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-np-apprunner-sg'
+
   AppRunnerVpcConnector:
     Type: AWS::AppRunner::VpcConnector
     Properties:
@@ -75,7 +88,7 @@ Resources:
         - ','
         - Fn::ImportValue: !Sub '${EnvironmentName}-NpPrivateSubnets'
       SecurityGroups:
-        - Fn::ImportValue: !Sub '${EnvironmentName}-NpPublicSubnets'
+        - !Ref AppRunnerSecurityGroup
 
   BackendService:
     Type: AWS::AppRunner::Service

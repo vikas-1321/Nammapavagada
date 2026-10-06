@@ -2,6 +2,21 @@ import React, { useState, useRef, useEffect } from 'react';
 import { LocationCategory } from '../../types/location';
 import { CategoryDefinition } from '../../data/categoriesData';
 import { SearchInput } from '../common/SearchInput';
+import {
+  Map,
+  Shield,
+  Layers,
+  Sparkles,
+  Zap,
+  Landmark,
+  HeartPulse,
+  Bus,
+  GraduationCap,
+  Building2,
+  MapPin,
+  X,
+  ChevronDown,
+} from 'lucide-react';
 
 export interface LocationFilterBarProps {
   categories: CategoryDefinition[];
@@ -13,28 +28,28 @@ export interface LocationFilterBarProps {
   totalCount: number;
 }
 
-const getCategoryEmoji = (categoryId: string): string => {
+const renderCategoryIcon = (categoryId: string, className = 'w-4 h-4 shrink-0') => {
   switch (categoryId) {
     case 'FORT_HERITAGE':
-      return '🏰';
+      return <Shield className={className} />;
     case 'MEGALITHIC_SITE':
-      return '🪨';
+      return <Layers className={className} />;
     case 'RELIGIOUS':
-      return '🛕';
+      return <Sparkles className={className} />;
     case 'SOLAR_INFRASTRUCTURE':
-      return '⚡';
+      return <Zap className={className} />;
     case 'CIVIC_GOVERNMENT':
-      return '🏛️';
+      return <Landmark className={className} />;
     case 'HEALTHCARE':
-      return '🏥';
+      return <HeartPulse className={className} />;
     case 'TRANSPORTATION':
-      return '🚌';
+      return <Bus className={className} />;
     case 'EDUCATION':
-      return '🎓';
+      return <GraduationCap className={className} />;
     case 'PUBLIC_UTILITY':
-      return '🏦';
+      return <Building2 className={className} />;
     default:
-      return '📍';
+      return <MapPin className={className} />;
   }
 };
 
@@ -101,9 +116,11 @@ export const LocationFilterBar: React.FC<LocationFilterBarProps> = ({
             aria-label="Filter places by category"
           >
             <div className="flex items-center gap-2 truncate">
-              <span className="text-sm leading-none shrink-0">
-                {selectedCategory === 'ALL' ? '🗺️' : getCategoryEmoji(selectedCategory)}
-              </span>
+              {selectedCategory === 'ALL' ? (
+                <Map className="w-4 h-4 text-forest-green shrink-0" />
+              ) : (
+                renderCategoryIcon(selectedCategory, 'w-4 h-4 text-forest-green shrink-0')
+              )}
               <span className="truncate font-medium text-forest-green">
                 {selectedCategory === 'ALL' ? 'All Categories' : selectedCategoryDef?.name}
               </span>
@@ -112,13 +129,11 @@ export const LocationFilterBar: React.FC<LocationFilterBarProps> = ({
               <span className="font-mono text-[10px] bg-forest-green text-white font-bold px-1.5 py-0.5 rounded-full">
                 {categoryCounts[selectedCategory] || 0}
               </span>
-              <span
-                className={`text-[10px] text-muted-text transition-transform duration-200 ${
+              <ChevronDown
+                className={`w-3.5 h-3.5 text-muted-text transition-transform duration-200 ${
                   isOpen ? 'rotate-180' : ''
                 }`}
-              >
-                ▼
-              </span>
+              />
             </div>
           </button>
 
@@ -140,7 +155,7 @@ export const LocationFilterBar: React.FC<LocationFilterBarProps> = ({
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span>🗺️</span>
+                    <Map className="w-4 h-4 shrink-0" />
                     <span>All Categories</span>
                   </div>
                   <span
@@ -160,7 +175,6 @@ export const LocationFilterBar: React.FC<LocationFilterBarProps> = ({
                 {categories.map((cat) => {
                   const isSelected = selectedCategory === cat.id;
                   const count = categoryCounts[cat.id] || 0;
-                  const emoji = getCategoryEmoji(cat.id);
 
                   return (
                     <button
@@ -177,7 +191,7 @@ export const LocationFilterBar: React.FC<LocationFilterBarProps> = ({
                       }`}
                     >
                       <div className="flex items-center gap-2 truncate pr-2">
-                        <span className="shrink-0">{emoji}</span>
+                        {renderCategoryIcon(cat.id, `w-4 h-4 shrink-0 ${isSelected ? 'text-white' : 'text-forest-green'}`)}
                         <span className="truncate">{cat.name}</span>
                       </div>
                       <span
@@ -222,10 +236,10 @@ export const LocationFilterBar: React.FC<LocationFilterBarProps> = ({
                 <button
                   type="button"
                   onClick={() => onSelectCategory('ALL')}
-                  className="hover:text-dark-text font-bold ml-0.5 cursor-pointer"
+                  className="hover:text-dark-text font-bold ml-0.5 cursor-pointer inline-flex items-center"
                   title="Clear category filter"
                 >
-                  ✕
+                  <X className="w-3 h-3" />
                 </button>
               </span>
             )}
@@ -235,10 +249,10 @@ export const LocationFilterBar: React.FC<LocationFilterBarProps> = ({
                 <button
                   type="button"
                   onClick={() => onSearchChange('')}
-                  className="hover:text-dark-text font-bold ml-0.5 cursor-pointer"
+                  className="hover:text-dark-text font-bold ml-0.5 cursor-pointer inline-flex items-center"
                   title="Clear search"
                 >
-                  ✕
+                  <X className="w-3 h-3" />
                 </button>
               </span>
             )}

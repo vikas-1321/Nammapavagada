@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TransitScheduleItem } from '../../types/service';
 import { Badge } from '../common/Badge';
+import { Bus, RotateCw, Search, X, MapPin, Clock, Star } from 'lucide-react';
 
 export interface TransitScheduleViewProps {
   routes: TransitScheduleItem[];
@@ -69,7 +70,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-xl">🚌</span>
+              <Bus className="w-5 h-5 text-forest-green shrink-0" />
               <h4 className="text-xs uppercase tracking-wider font-bold text-forest-green">
                 Public Transit Network · Pavagada Central Station & Taluk Corridors
               </h4>
@@ -108,7 +109,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
                 className="inline-flex items-center gap-2 px-3 py-1.5 bg-warm-cream hover:bg-soft-sand text-dark-text text-xs font-semibold rounded-xl border border-soft-sand transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
                 title="Refresh routes and stops from live server"
               >
-                <span className={isRefreshing ? 'animate-spin' : ''}>🔄</span>
+                <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
                 <span>{isRefreshing ? 'Syncing...' : 'Sync Timetables'}</span>
               </button>
             )}
@@ -168,7 +169,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
 
         {/* Search Input */}
         <div className="relative min-w-[220px]">
-          <span className="absolute left-3 top-2.5 text-xs text-muted-text select-none">🔍</span>
+          <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-muted-text pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
@@ -180,9 +181,9 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-2 text-xs text-muted-text hover:text-dark-text"
+              className="absolute right-2.5 top-2 text-xs text-muted-text hover:text-dark-text cursor-pointer"
             >
-              ✕
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
@@ -191,7 +192,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
       {/* Route List */}
       {filteredRoutes.length === 0 ? (
         <div className="bg-white border border-soft-sand rounded-2xl p-10 text-center space-y-3">
-          <div className="text-3xl">🚌</div>
+          <Bus className="w-10 h-10 text-forest-green/50 mx-auto" />
           <h3 className="text-base font-serif font-bold text-dark-text">No Matching Transit Routes</h3>
           <p className="text-xs text-muted-text max-w-md mx-auto">
             No active corridors matched &ldquo;{searchQuery}&rdquo; under the selected filter. Try clearing your search query or choosing another operator.
@@ -275,7 +276,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
                 <div className="mb-5">
                   <div className="flex items-center justify-between mb-2.5">
                     <span className="font-bold text-forest-green uppercase text-[11px] tracking-wider flex items-center gap-1.5">
-                      <span>🚏</span>
+                      <MapPin className="w-3.5 h-3.5 text-forest-green shrink-0" />
                       <span>Travel Order & Sequenced Stops</span>
                       {hasStops && (
                         <span className="bg-forest-green/10 text-forest-green text-[10px] font-mono px-1.5 py-0.2 rounded-md font-bold">
@@ -305,7 +306,8 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
                                   </span>
                                   {stop.isMajorStop && (
                                     <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded flex items-center gap-0.5">
-                                      ★ Major Hub
+                                      <Star className="w-2.5 h-2.5 fill-amber-600 text-amber-600" />
+                                      <span>Major Hub</span>
                                     </span>
                                   )}
                                   {isFirst && (
@@ -331,8 +333,9 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
                                 )}
 
                                 {stop.arrivalEstimateMinutes !== null && stop.arrivalEstimateMinutes !== undefined && (
-                                  <div className="text-[10px] font-mono text-terracotta mt-1">
-                                    ⏱ +{stop.arrivalEstimateMinutes} mins
+                                  <div className="text-[10px] font-mono text-terracotta mt-1 flex items-center gap-1">
+                                    <Clock className="w-2.5 h-2.5" />
+                                    <span>+{stop.arrivalEstimateMinutes} mins</span>
                                   </div>
                                 )}
                               </li>
@@ -377,7 +380,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-bold text-forest-green uppercase text-[11px] tracking-wider flex items-center gap-1.5">
-                        <span>🕒</span>
+                        <Clock className="w-3.5 h-3.5 text-forest-green shrink-0" />
                         <span>Scheduled Departures & Timetable</span>
                         <span className="bg-forest-green/10 text-forest-green text-[10px] font-mono px-1.5 py-0.2 rounded-md font-bold">
                           {route.timings!.length} TRIPS

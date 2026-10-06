@@ -1,6 +1,7 @@
 import React from 'react';
 import { LocationDetail } from '../../types/location';
 import { LocationCard } from './LocationCard';
+import { Search } from 'lucide-react';
 
 export interface LocationGridProps {
   locations: LocationDetail[];
@@ -18,8 +19,8 @@ export const LocationGrid: React.FC<LocationGridProps> = ({
   if (locations.length === 0) {
     return (
       <div className="bg-white border border-soft-sand rounded-2xl p-10 md:p-16 text-center my-8 shadow-sm">
-        <div className="w-16 h-16 rounded-full bg-soft-sand/50 text-forest-green flex items-center justify-center text-2xl mx-auto mb-4">
-          🔍
+        <div className="w-16 h-16 rounded-full bg-soft-sand/50 text-forest-green flex items-center justify-center mx-auto mb-4">
+          <Search className="w-8 h-8 text-forest-green/70" />
         </div>
         <div className="text-xl md:text-2xl font-serif font-bold text-forest-green mb-2">
           No records match active criteria

@@ -1,4 +1,5 @@
 import React from 'react';
+import { MapPin } from 'lucide-react';
 import { MegalithicSiteRecord } from '../../types/history';
 
 export interface MegalithicHeritageViewProps {
@@ -42,9 +43,10 @@ export const MegalithicHeritageView: React.FC<MegalithicHeritageViewProps> = ({ 
                 {site.kannadaName && (
                   <p className="text-sm font-kannada text-earth-brown mt-0.5">{site.kannadaName}</p>
                 )}
-                <p className="text-xs text-forest-green font-mono mt-3 bg-warm-cream p-3 rounded-xl border border-soft-sand">
-                  📍 {site.locationDetails}
-                </p>
+                <div className="text-xs text-forest-green font-mono mt-3 bg-warm-cream p-3 rounded-xl border border-soft-sand flex items-center gap-2">
+                  <MapPin className="w-3.5 h-3.5 text-forest-green shrink-0" />
+                  <span>{site.locationDetails}</span>
+                </div>
               </div>
 
               {/* Tomb Typology */}
