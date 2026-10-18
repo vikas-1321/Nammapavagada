@@ -1,14 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PageRoute } from '../../types/navigation';
+import { ACADEMIC_CITATIONS } from '../../data/historyData';
+import { BookOpen, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 
 export interface FooterProps {
   onRouteChange: (route: PageRoute) => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ onRouteChange }) => {
+  const [showBibliography, setShowBibliography] = useState(false);
+
   return (
     <footer className="bg-forest-green text-warm-cream border-t-4 border-terracotta mt-20 pt-16 pb-12">
-      <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 space-y-12">
         {/* 12-Column Grid Header */}
         <div className="grid grid-cols-12 gap-8 pb-12 border-b border-forest-green-light">
           {/* Main Brand Statement */}
@@ -177,13 +181,73 @@ export const Footer: React.FC<FooterProps> = ({ onRouteChange }) => {
           </div>
         </div>
 
+        {/* INTEGRATED HISTORICAL SOURCES & BIBLIOGRAPHY DRAWER (Relocated from Heritage Page) */}
+        <div className="bg-forest-green-dark/70 border border-forest-green-light rounded-2xl p-5 md:p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-terracotta-light font-bold">
+                <BookOpen className="w-3.5 h-3.5 text-terracotta" />
+                <span>Historical Sources & Academic Bibliography</span>
+              </div>
+              <p className="text-xs text-soft-sand/80 max-w-2xl font-sans">
+                Primary and peer-reviewed architectural surveys, epigraphia carnatica, and district gazetteers grounding Pavagada&apos;s history.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowBibliography(!showBibliography)}
+              className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl bg-forest-green hover:bg-forest-green-light border border-forest-green-light text-warm-cream transition-colors shadow-sm self-start sm:self-auto shrink-0"
+              aria-expanded={showBibliography}
+            >
+              <span>{showBibliography ? 'Collapse Sources' : 'View Verified Citations'}</span>
+              <span className="text-[10px] font-mono bg-terracotta text-white px-1.5 py-0.2 rounded font-bold">
+                {ACADEMIC_CITATIONS.length}
+              </span>
+              {showBibliography ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+
+          {/* Expandable Bibliography Details */}
+          {showBibliography && (
+            <div className="pt-4 border-t border-forest-green-light/70 divide-y divide-forest-green-light/40 space-y-4 animate-fade-in">
+              {ACADEMIC_CITATIONS.map((cite, index) => (
+                <div key={cite.id} className="pt-3.5 first:pt-0 space-y-1">
+                  <div className="flex items-start gap-2.5">
+                    <span className="text-[10px] font-mono font-bold text-terracotta-light bg-forest-green-dark px-1.5 py-0.5 rounded shrink-0 mt-0.5">
+                      0{index + 1}
+                    </span>
+                    <div className="space-y-0.5">
+                      <div className="text-sm font-serif font-bold text-white">
+                        {cite.title}
+                      </div>
+                      <div className="text-xs text-soft-sand/80">
+                        <span className="text-white font-medium">{cite.authors}</span> ({cite.year}).{' '}
+                        <em className="text-terracotta-light">{cite.publication}</em>.
+                        {cite.isbnOrDoi && (
+                          <span className="ml-1.5 font-mono text-[11px] text-terracotta">
+                            [{cite.isbnOrDoi}]
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-soft-sand/70 font-sans leading-relaxed pt-0.5">
+                        {cite.notes}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Bottom Colophon with Academic Citations Credit */}
-        <div className="pt-8 flex flex-col md:flex-row items-center justify-between text-xs text-soft-sand/70 font-sans gap-4">
+        <div className="pt-4 flex flex-col md:flex-row items-center justify-between text-xs text-soft-sand/70 font-sans gap-4 border-t border-forest-green-light/60">
           <div>
             © {new Date().getFullYear()} Namma Pavagada. Documenting Pavagada Taluk, Tumakuru District, Karnataka.
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-[11px]">
-            <span>Sources: Vivek & Sagar (2022)</span>
+          <div className="flex flex-wrap items-center gap-3 text-[11px]">
+            <span>Vivek &amp; Sagar (2022)</span>
             <span className="text-terracotta">•</span>
             <span>V.R. Cheluvarajan (2015)</span>
             <span className="text-terracotta">•</span>

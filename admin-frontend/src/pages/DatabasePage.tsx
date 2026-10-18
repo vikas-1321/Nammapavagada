@@ -143,10 +143,10 @@ export const DatabasePage: React.FC<DatabasePageProps> = ({ onNavigate }) => {
                   Healthcare ({results.hospitals.length})
                 </h4>
                 <button
-                  onClick={() => onNavigate('hospitals')}
+                  onClick={() => onNavigate('locations')}
                   className="text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1"
                 >
-                  <span>Open in Hospitals CMS</span>
+                  <span>Open in Locations CMS</span>
                   <ArrowRight size={12} />
                 </button>
               </div>

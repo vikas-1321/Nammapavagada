@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { LocationDetail } from '../../types/location';
 import { Badge } from '../common/Badge';
 import { formatCoordinates, formatElevation } from '../../utils/formatting';
 import { CATEGORY_REGISTRY } from '../../data/categoriesData';
-import { MapPin } from 'lucide-react';
+import { MapPin, ImageOff } from 'lucide-react';
 
 export interface LocationCardProps {
   location: LocationDetail;
@@ -16,30 +16,54 @@ export const LocationCard: React.FC<LocationCardProps> = ({
   onSelect,
   onViewOnMap,
 }) => {
-  const categoryDef = CATEGORY_REGISTRY[location.category];
+  const [imageError, setImageError] = useState(false);
+  const categoryDef = (CATEGORY_REGISTRY as Record<string, any>)[location.category];
 
   // Visual header styling according to category
-  const isHeritage = location.category === 'FORT_HERITAGE' || location.category === 'MEGALITHIC_SITE' || location.category === 'RELIGIOUS';
+  const isHeritage =
+    location.category === 'FORT_HERITAGE' ||
+    location.category === 'MEGALITHIC_SITE' ||
+    location.category === 'RELIGIOUS';
   const isSolar = location.category === 'SOLAR_INFRASTRUCTURE';
 
   const badgeVariant = isHeritage ? 'earth' : isSolar ? 'terracotta' : 'forest';
+  const hasCoordinates =
+    location.coordinates?.latitude != null &&
+    location.coordinates?.longitude != null &&
+    !isNaN(location.coordinates.latitude) &&
+    !isNaN(location.coordinates.longitude);
 
   return (
     <article className="bg-white border border-soft-sand hover:border-terracotta/60 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between h-full group">
       <div>
         {/* Subtle Category Header Accent */}
-        <div className={`h-2.5 w-full ${
-          isSolar ? 'bg-terracotta' : isHeritage ? 'bg-earth-brown' : 'bg-forest-green'
-        }`} />
+        <div
+          className={`h-2.5 w-full ${
+            isSolar ? 'bg-terracotta' : isHeritage ? 'bg-earth-brown' : 'bg-forest-green'
+          }`}
+        />
+
+        {/* Optional Primary Photo */}
+        {location.primaryPhotoUrl && !imageError && (
+          <div className="relative h-44 w-full bg-soft-sand overflow-hidden border-b border-soft-sand/70">
+            <img
+              src={location.primaryPhotoUrl}
+              alt={location.name}
+              onError={() => setImageError(true)}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              loading="lazy"
+            />
+          </div>
+        )}
 
         <div className="p-5 md:p-6">
           {/* Top Meta Line: Code & Category Pill */}
           <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-soft-sand/60">
             <span className="font-mono text-xs text-muted-text font-bold">
-              {location.code}
+              {location.code || 'PVG-LOC'}
             </span>
             <Badge variant={badgeVariant}>
-              {categoryDef ? categoryDef.name : location.category}
+              {categoryDef ? categoryDef.name : (location as any).categoryName || location.category}
             </Badge>
           </div>
 
@@ -59,11 +83,17 @@ export const LocationCard: React.FC<LocationCardProps> = ({
           <div className="font-mono text-xs text-forest-green bg-warm-cream/80 border border-soft-sand rounded-lg px-3 py-2 mb-4 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 truncate">
               <MapPin className="w-3.5 h-3.5 text-terracotta shrink-0" />
-              <span>{formatCoordinates(location.coordinates.latitude, location.coordinates.longitude)}</span>
+              <span>
+                {hasCoordinates
+                  ? formatCoordinates(location.coordinates.latitude, location.coordinates.longitude)
+                  : 'Coordinates not specified'}
+              </span>
             </span>
-            <span className="text-muted-text shrink-0 text-[11px]">
-              {formatElevation(location.coordinates.elevationMeters)}
-            </span>
+            {location.coordinates?.elevationMeters != null && (
+              <span className="text-muted-text shrink-0 text-[11px]">
+                {formatElevation(location.coordinates.elevationMeters)}
+              </span>
+            )}
           </div>
 
           {/* Summary Description */}
@@ -94,7 +124,7 @@ export const LocationCard: React.FC<LocationCardProps> = ({
         <button
           type="button"
           onClick={() => onSelect(location)}
-          className="text-xs uppercase tracking-wider font-bold text-forest-green hover:text-terracotta flex items-center gap-1.5 py-1 transition-colors group/btn"
+          className="text-xs uppercase tracking-wider font-bold text-forest-green hover:text-terracotta flex items-center gap-1.5 py-1 transition-colors group/btn cursor-pointer"
         >
           <span>View Details</span>
           <span className="inline-block transition-transform duration-200 group-hover/btn:translate-x-1">
@@ -102,11 +132,11 @@ export const LocationCard: React.FC<LocationCardProps> = ({
           </span>
         </button>
 
-        {onViewOnMap && (
+        {onViewOnMap && hasCoordinates && (
           <button
             type="button"
             onClick={() => onViewOnMap(location)}
-            className="text-xs font-semibold text-muted-text hover:text-forest-green bg-warm-cream/80 hover:bg-soft-sand border border-soft-sand px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+            className="text-xs font-semibold text-muted-text hover:text-forest-green bg-warm-cream/80 hover:bg-soft-sand border border-soft-sand px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
           >
             <span>Locate</span>
             <span className="text-terracotta">⌖</span>

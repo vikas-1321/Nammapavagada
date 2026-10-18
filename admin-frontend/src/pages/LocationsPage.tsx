@@ -5,57 +5,78 @@ import {
   Edit2,
   Trash2,
   Eye,
-  X,
   Loader2,
   AlertCircle,
   MapPin,
   CheckCircle,
+  ShieldCheck,
+  AlertTriangle,
+  Copy,
+  Filter,
+  RefreshCw,
+  Sparkles,
+  Building,
 } from 'lucide-react';
 import { adminApi } from '../services/api';
-import { LocationItem, Category } from '../types';
+import { LocationItem, Category, DataFreshnessStats } from '../types';
+import { MAIN_CATEGORIES_TAXONOMY } from '../data/categoryTaxonomy';
+import { PlaceEntryModal } from '../components/forms/PlaceEntryModal';
+import { PlaceDetailsModal } from '../components/common/PlaceDetailsModal';
+import { QuickVerifyModal } from '../components/common/QuickVerifyModal';
 
 export const LocationsPage: React.FC = () => {
   const [locations, setLocations] = useState<LocationItem[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [selectedSubcategory, setSelectedSubcategory] = useState('ALL');
+  const [selectedArea, setSelectedArea] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const [selectedVerification, setSelectedVerification] = useState('ALL');
+  const [filterNeedsVerification, setFilterNeedsVerification] = useState(false);
 
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingLocation, setEditingLocation] = useState<LocationItem | null>(null);
-  const [formData, setFormData] = useState<Partial<LocationItem>>({
-    name: '',
-    kannadaName: '',
-    category: 'FORT_HERITAGE',
-    summary: '',
-    fullDescription: '',
-    address: 'Pavagada, Karnataka 561202',
-    coordinates: { latitude: 14.1025, longitude: 77.2798, elevationMeters: 740 },
-    contact: { authority: '', phone: '', website: '' },
-    hours: { open: '06:00 AM', close: '06:00 PM', days: 'Daily' },
-    tags: [],
-    keyAttributes: [],
-    verifiedSource: '',
-    isPdfAuthoritative: true,
-    status: 'ACTIVE',
-  });
-  const [formError, setFormError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [successToast, setSuccessToast] = useState<string | null>(null);
+  // Freshness Stats
+  const [freshnessStats, setFreshnessStats] = useState<DataFreshnessStats | null>(null);
+
+  // Modals
+  const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
+  const [selectedLocationForEdit, setSelectedLocationForEdit] = useState<LocationItem | null>(null);
+
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedLocationForView, setSelectedLocationForView] = useState<LocationItem | null>(null);
+
+  const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
+  const [selectedLocationForVerify, setSelectedLocationForVerify] = useState<LocationItem | null>(null);
+
+  // Toast feedback
+  const [feedbackToast, setFeedbackToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setFeedbackToast({ message, type });
+    setTimeout(() => setFeedbackToast(null), 3500);
+  };
 
   const fetchLocations = async () => {
     try {
       setLoading(true);
-      const [locsRes, catsRes] = await Promise.all([
-        adminApi.getLocations({ category: selectedCategory, q: searchQuery, status: selectedStatus }),
-        adminApi.getCategories(),
+      const [locsRes, freshRes] = await Promise.all([
+        adminApi.getLocations({
+          category: selectedCategory,
+          subcategory: selectedSubcategory,
+          area: selectedArea,
+          status: selectedStatus,
+          verification: selectedVerification,
+          needsVerification: filterNeedsVerification,
+          q: searchQuery,
+          limit: 300,
+        }),
+        adminApi.getFreshnessStats().catch(() => null),
       ]);
       setLocations(locsRes.items || []);
-      setCategories(catsRes || []);
-    } catch (err) {
+      if (freshRes) setFreshnessStats(freshRes);
+    } catch (err: any) {
       console.error(err);
+      showToast(err.message || 'Failed to load locations', 'error');
     } finally {
       setLoading(false);
     }
@@ -63,501 +84,514 @@ export const LocationsPage: React.FC = () => {
 
   useEffect(() => {
     fetchLocations();
-  }, [selectedCategory, selectedStatus]);
+  }, [
+    selectedCategory,
+    selectedSubcategory,
+    selectedArea,
+    selectedStatus,
+    selectedVerification,
+    filterNeedsVerification,
+  ]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     fetchLocations();
   };
 
-  const handleOpenAddModal = () => {
-    setEditingLocation(null);
-    setFormData({
-      name: '',
-      kannadaName: '',
-      category: categories[0]?.id || 'FORT_HERITAGE',
-      summary: '',
-      fullDescription: '',
-      address: 'Pavagada Town, Karnataka 561202',
-      coordinates: { latitude: 14.1025, longitude: 77.2798, elevationMeters: 740 },
-      contact: { authority: 'Revenue Department / Municipal Council', phone: '', website: '' },
-      hours: { open: '06:00 AM', close: '06:00 PM', days: 'Daily' },
-      tags: ['Pavagada', 'Verified'],
-      keyAttributes: [],
-      verifiedSource: 'Official Administrative Records',
-      isPdfAuthoritative: true,
-      status: 'ACTIVE',
-    });
-    setFormError(null);
-    setIsModalOpen(true);
+  const handleOpenAdd = () => {
+    setSelectedLocationForEdit(null);
+    setIsEntryModalOpen(true);
   };
 
-  const handleOpenEditModal = (loc: LocationItem) => {
-    setEditingLocation(loc);
-    setFormData({
-      ...loc,
-      coordinates: { ...loc.coordinates },
-      contact: { ...loc.contact },
-      hours: { ...loc.hours },
-      tags: [...(loc.tags || [])],
-      keyAttributes: [...(loc.keyAttributes || [])],
-    });
-    setFormError(null);
-    setIsModalOpen(true);
+  const handleOpenEdit = (loc: LocationItem) => {
+    setSelectedLocationForEdit(loc);
+    setIsEntryModalOpen(true);
   };
 
-  const handleSaveLocation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
+  const handleOpenView = (loc: LocationItem) => {
+    setSelectedLocationForView(loc);
+    setIsDetailsModalOpen(true);
+  };
 
-    // Validation
-    if (!formData.name?.trim()) {
-      setFormError('Location name is required.');
-      return;
-    }
-    if (!formData.summary?.trim()) {
-      setFormError('Brief summary description is required.');
-      return;
-    }
-    if (formData.coordinates?.latitude == null || isNaN(formData.coordinates.latitude)) {
-      setFormError('Valid numeric latitude is required (e.g. 14.1025).');
-      return;
-    }
-    if (formData.coordinates?.longitude == null || isNaN(formData.coordinates.longitude)) {
-      setFormError('Valid numeric longitude is required (e.g. 77.2798).');
-      return;
-    }
+  const handleOpenVerify = (loc: LocationItem) => {
+    setSelectedLocationForVerify(loc);
+    setIsVerifyModalOpen(true);
+  };
 
-    setIsSaving(true);
+  const handleDuplicate = async (loc: LocationItem) => {
     try {
-      if (editingLocation) {
-        await adminApi.updateLocation(editingLocation.id, formData);
-        setSuccessToast(`Updated "${formData.name}" successfully.`);
-      } else {
-        await adminApi.createLocation(formData);
-        setSuccessToast(`Created new location "${formData.name}"! Public map automatically updated.`);
-      }
-      setIsModalOpen(false);
+      const duplicated = await adminApi.duplicateLocation(loc.id);
+      showToast(`Duplicated "${loc.name}" as draft. Opening for edit...`);
       fetchLocations();
-      setTimeout(() => setSuccessToast(null), 4000);
+      setSelectedLocationForEdit(duplicated);
+      setIsEntryModalOpen(true);
     } catch (err: any) {
-      setFormError(err.message || 'Failed to save location.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleToggleStatus = async (loc: LocationItem) => {
-    const nextStatus = loc.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-    try {
-      await adminApi.setLocationStatus(loc.id, nextStatus);
-      fetchLocations();
-    } catch (err: any) {
-      alert(err.message || 'Status update failed.');
+      showToast(err.message || 'Failed to duplicate place', 'error');
     }
   };
 
   const handleArchive = async (loc: LocationItem) => {
-    if (!window.confirm(`Are you sure you want to archive "${loc.name}"? It will no longer appear on the public map or website.`)) {
+    if (!window.confirm(`Are you sure you want to archive "${loc.name}"? It will be hidden from the public portal.`)) {
       return;
     }
     try {
-      await adminApi.deleteLocation(loc.id);
+      await adminApi.setLocationStatus(loc.id, 'ARCHIVED');
+      showToast(`Archived "${loc.name}".`);
       fetchLocations();
-      setSuccessToast(`Archived "${loc.name}".`);
-      setTimeout(() => setSuccessToast(null), 3000);
     } catch (err: any) {
-      alert(err.message || 'Archive failed.');
+      showToast(err.message || 'Failed to archive place', 'error');
     }
   };
 
+  // Subcategories available based on selected category
+  const activeMainCatMeta = MAIN_CATEGORIES_TAXONOMY.find((c) => c.id === selectedCategory);
+  const availableSubcategories = activeMainCatMeta?.subcategories || [];
+
   return (
     <div className="space-y-6">
-      {/* Toast */}
-      {successToast && (
-        <div className="p-4 rounded-xl bg-emerald-950/80 border border-emerald-700 text-emerald-200 text-xs font-semibold flex items-center gap-2 shadow-xl animate-fade-in">
-          <CheckCircle size={18} className="text-emerald-400 shrink-0" />
-          <span>{successToast}</span>
+      {/* Toast Feedback */}
+      {feedbackToast && (
+        <div
+          className={`fixed top-5 right-5 z-50 p-4 rounded-2xl shadow-2xl border text-xs font-semibold flex items-center gap-2 animate-fadeIn ${
+            feedbackToast.type === 'success'
+              ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+              : 'bg-rose-950 text-rose-300 border-rose-700'
+          }`}
+        >
+          {feedbackToast.type === 'success' ? (
+            <CheckCircle size={16} className="text-emerald-400" />
+          ) : (
+            <AlertCircle size={16} className="text-rose-400" />
+          )}
+          <span>{feedbackToast.message}</span>
         </div>
       )}
 
-      {/* Control Bar: Filters, Search, Add */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 glass-panel p-4 rounded-2xl">
-        <form onSubmit={handleSearch} className="flex items-center gap-3 w-full sm:w-auto flex-1">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={16} className="absolute left-3 top-3 text-slate-500" />
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2.5">
+            <Building size={22} className="text-emerald-400" />
+            <span>All Places & Civic Services CMS</span>
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Categorized content management system for Namma Pavagada: healthcare, transit, civic administration, schools, and essential trades.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={fetchLocations}
+            className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+            title="Refresh database records"
+          >
+            <RefreshCw size={15} />
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenAdd}
+            className="flex items-center gap-2 px-5 py-2.5 bg-forest hover:bg-forest-light text-white text-xs font-bold rounded-xl shadow-lg shadow-forest/20 transition-all hover:scale-[1.02]"
+          >
+            <Plus size={16} />
+            <span>Add New Place / Service</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Data Freshness Alert Banner (Section 29) */}
+      {freshnessStats && freshnessStats.totalNeedingAttention > 0 && (
+        <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-950 border border-amber-800 text-amber-400 flex items-center justify-center shrink-0">
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-amber-200">
+                  Data Freshness Advisory: Needs Verification
+                </h4>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800">
+                  {freshnessStats.totalNeedingAttention} records
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-400/90 mt-0.5">
+                {freshnessStats.staleRecords} records have not been verified for over 6 months, and{' '}
+                {freshnessStats.pendingVerification} records are pending initial administrative check.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setFilterNeedsVerification(!filterNeedsVerification)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                filterNeedsVerification
+                  ? 'bg-amber-500 text-slate-950'
+                  : 'bg-amber-900/60 hover:bg-amber-900 text-amber-200 border border-amber-800'
+              }`}
+            >
+              {filterNeedsVerification ? 'Show All Records' : 'Filter Unverified'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Filter and Search Bar */}
+      <div className="glass-panel p-4 rounded-2xl space-y-3">
+        {/* Search Row */}
+        <form onSubmit={handleSearch} className="flex gap-2.5">
+          <div className="relative flex-1">
+            <Search size={15} className="absolute left-3.5 top-3 text-slate-500" />
             <input
               type="text"
-              placeholder="Search by name, summary, tag..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              placeholder="Search by official name, alias, tags (e.g. '24/7 hospital', 'hostel', 'UPI'), phone, or area..."
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
             />
           </div>
-          <button type="submit" className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold">
+
+          <button
+            type="submit"
+            className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition-colors"
+          >
             Search
           </button>
         </form>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-          {/* Category Dropdown */}
+        {/* Dropdown Filters Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-xs">
+          {/* Category Filter */}
           <select
             value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
+            onChange={(e) => {
+              setSelectedCategory(e.target.value);
+              setSelectedSubcategory('ALL');
+            }}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 focus:outline-none focus:border-emerald-500"
           >
-            <option value="ALL">All Categories</option>
-            {categories.map((c) => (
+            <option value="ALL">All Main Categories</option>
+            {MAIN_CATEGORIES_TAXONOMY.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
               </option>
             ))}
           </select>
 
-          {/* Status Dropdown */}
+          {/* Subcategory Filter */}
+          <select
+            value={selectedSubcategory}
+            onChange={(e) => setSelectedSubcategory(e.target.value)}
+            disabled={selectedCategory === 'ALL' || availableSubcategories.length === 0}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 focus:outline-none focus:border-emerald-500 disabled:opacity-40"
+          >
+            <option value="ALL">All Subcategories</option>
+            {availableSubcategories.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+
+          {/* Area Filter */}
+          <select
+            value={selectedArea}
+            onChange={(e) => setSelectedArea(e.target.value)}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 focus:outline-none focus:border-emerald-500"
+          >
+            <option value="ALL">All Areas / Localities</option>
+            <option value="Pavagada Town">Pavagada Town</option>
+            <option value="Fort Area">Fort Area</option>
+            <option value="Bus Stand Road">Bus Stand Road</option>
+            <option value="Hospital Road">Hospital Road</option>
+            <option value="Kyathaganacherlu">Kyathaganacherlu</option>
+            <option value="Thirumani">Thirumani (Solar Park)</option>
+            <option value="Y.N. Hosakote">Y.N. Hosakote</option>
+          </select>
+
+          {/* Status Filter */}
           <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-300 focus:outline-none"
+            className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 focus:outline-none focus:border-emerald-500"
           >
             <option value="ALL">All Statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
+            <option value="ACTIVE">Published (Live)</option>
             <option value="DRAFT">Draft</option>
+            <option value="TEMPORARILY_CLOSED">Temporarily Closed</option>
+            <option value="INACTIVE">Inactive</option>
             <option value="ARCHIVED">Archived</option>
           </select>
 
-          {/* Add Button */}
-          <button
-            onClick={handleOpenAddModal}
-            className="px-4 py-2 bg-forest hover:bg-forest-light text-white rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0 shadow-md shadow-forest/30"
+          {/* Verification Filter */}
+          <select
+            value={selectedVerification}
+            onChange={(e) => setSelectedVerification(e.target.value)}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-300 focus:outline-none focus:border-emerald-500"
           >
-            <Plus size={16} />
-            <span>Add Location</span>
+            <option value="ALL">All Verification</option>
+            <option value="VERIFIED">Verified</option>
+            <option value="PENDING">Pending Verification</option>
+            <option value="NEEDS_REVERIFICATION">Needs Reverification</option>
+            <option value="NOT_VERIFIED">Not Verified</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Main Places Table View */}
+      {loading ? (
+        <div className="py-20 text-center text-slate-400">
+          <Loader2 size={28} className="animate-spin mx-auto mb-3 text-emerald-400" />
+          <span className="text-xs">Loading categorized places and civic services...</span>
+        </div>
+      ) : locations.length === 0 ? (
+        <div className="py-16 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/30">
+          <Building size={32} className="mx-auto text-slate-600 mb-2" />
+          <h4 className="text-sm font-bold text-white mb-1">No Places Matching Filter</h4>
+          <p className="text-xs text-slate-400 mb-4 max-w-sm mx-auto">
+            Try adjusting your search query, main category, or verification filters.
+          </p>
+          <button
+            type="button"
+            onClick={handleOpenAdd}
+            className="px-4 py-2 bg-forest hover:bg-forest-light text-white text-xs font-bold rounded-xl transition-colors"
+          >
+            + Add New Place Now
           </button>
         </div>
-      </div>
-
-      {/* Locations Table */}
-      <div className="glass-panel rounded-2xl overflow-hidden border border-slate-800">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-800 bg-slate-900/60 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
-                <th className="py-3 px-4">Code</th>
-                <th className="py-3 px-4">Name / Category</th>
-                <th className="py-3 px-4">Coordinates (Map)</th>
-                <th className="py-3 px-4">Summary</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {loading ? (
+      ) : (
+        <div className="glass-panel rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-300">
+              <thead className="bg-slate-950/80 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800">
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
-                    <Loader2 size={24} className="animate-spin mx-auto mb-2 text-emerald-400" />
-                    <span>Loading locations...</span>
-                  </td>
+                  <th className="py-3 px-4">Place / Service Name</th>
+                  <th className="py-3 px-4">Category & Type</th>
+                  <th className="py-3 px-4">Area / Locality</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Verification</th>
+                  <th className="py-3 px-4">Discovery Tags</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
-              ) : locations.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-500">
-                    No locations match the filter criteria. Click "Add Location" to create one.
-                  </td>
-                </tr>
-              ) : (
-                locations.map((loc) => (
-                  <tr key={loc.id} className="table-row-hover">
-                    <td className="py-3 px-4 font-mono text-[11px] text-emerald-400 font-semibold">
-                      {loc.code}
-                    </td>
-                    <td className="py-3 px-4">
-                      <p className="font-bold text-white">{loc.name}</p>
-                      {loc.kannadaName && <p className="text-[11px] text-slate-400">{loc.kannadaName}</p>}
-                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-mono">
-                        {loc.category}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1 font-mono text-slate-300">
-                        <MapPin size={12} className="text-emerald-400 shrink-0" />
-                        <span>{loc.coordinates.latitude.toFixed(4)}, {loc.coordinates.longitude.toFixed(4)}</span>
-                      </div>
-                      {loc.coordinates.elevationMeters && (
-                        <p className="text-[10px] text-slate-500 font-mono mt-0.5">Alt: {loc.coordinates.elevationMeters}m</p>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 max-w-xs">
-                      <p className="line-clamp-2 text-slate-300 text-[11px]">{loc.summary}</p>
-                    </td>
-                    <td className="py-3 px-4">
-                      <button
-                        onClick={() => handleToggleStatus(loc)}
-                        title="Click to toggle status"
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors ${
-                          loc.status === 'ACTIVE'
-                            ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800 hover:bg-emerald-900'
-                            : loc.status === 'DRAFT'
-                            ? 'bg-amber-950/80 text-amber-300 border-amber-800'
-                            : 'bg-slate-800 text-slate-400 border-slate-700'
-                        }`}
-                      >
-                        {loc.status}
-                      </button>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenEditModal(loc)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-                          title="Edit Location"
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {locations.map((loc) => {
+                  const isVerified = loc.verification?.status === 'VERIFIED';
+                  const isFresh = loc.verification?.isFresh !== false;
+                  return (
+                    <tr
+                      key={loc.id}
+                      className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
+                      onClick={() => handleOpenView(loc)}
+                    >
+                      {/* Name & Kannada Title */}
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-white group-hover:text-emerald-400 transition-colors flex items-center gap-1.5">
+                          <span className="font-mono text-[10px] text-emerald-400 font-bold">
+                            {loc.code}
+                          </span>
+                          <span>{loc.name}</span>
+                        </div>
+                        {loc.kannadaName && (
+                          <div className="text-[11px] text-slate-400 mt-0.5">{loc.kannadaName}</div>
+                        )}
+                      </td>
+
+                      {/* Category & Subcategory */}
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap gap-1 max-w-[240px]">
+                          {(loc.subcategory
+                            ? loc.subcategory.split(',').map((s) => s.trim()).filter(Boolean)
+                            : [loc.category]
+                          ).map((sub) => (
+                            <span
+                              key={sub}
+                              className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700"
+                            >
+                              {sub}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+
+                      {/* Area */}
+                      <td className="py-3 px-4 text-slate-300">
+                        <div className="flex items-center gap-1">
+                          <MapPin size={12} className="text-slate-500" />
+                          <span>{loc.area || 'Pavagada Town'}</span>
+                        </div>
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3 px-4">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            loc.status === 'DRAFT'
+                              ? 'bg-slate-800 text-slate-400 border-slate-700'
+                              : loc.status === 'TEMPORARILY_CLOSED'
+                              ? 'bg-amber-950 text-amber-300 border-amber-800'
+                              : loc.status === 'ARCHIVED'
+                              ? 'bg-slate-900 text-slate-500 border-slate-800'
+                              : 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                          }`}
                         >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleArchive(loc)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-red-950/60 text-slate-400 hover:text-red-400 transition-colors"
-                          title="Archive Location"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                          {loc.status}
+                        </span>
+                      </td>
 
-      {/* Modal: Add / Edit Location */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative my-8">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div>
-                <h3 className="text-base font-bold text-white">
-                  {editingLocation ? `Edit Location: ${editingLocation.name}` : 'Add New Location to Pavagada Registry'}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Data entered here will automatically update the public maps, search index, and cards.
-                </p>
-              </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800"
-              >
-                <X size={20} />
-              </button>
-            </div>
+                      {/* Verification Status */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              isVerified && isFresh
+                                ? 'bg-emerald-400 shadow-sm shadow-emerald-400'
+                                : isVerified && !isFresh
+                                ? 'bg-amber-400 shadow-sm shadow-amber-400'
+                                : 'bg-slate-500'
+                            }`}
+                          />
+                          <span
+                            className={`font-semibold text-[11px] ${
+                              isVerified ? 'text-emerald-300' : 'text-slate-400'
+                            }`}
+                          >
+                            {loc.verification?.status || 'PENDING'}
+                          </span>
+                        </div>
+                        {loc.verification?.lastVerifiedAt && (
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            {new Date(loc.verification.lastVerifiedAt).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                            })}
+                          </div>
+                        )}
+                      </td>
 
-            {formError && (
-              <div className="mt-4 p-3 rounded-xl bg-red-950/50 border border-red-800 text-red-300 text-xs flex items-center gap-2">
-                <AlertCircle size={16} className="shrink-0 text-red-400" />
-                <span>{formError}</span>
-              </div>
-            )}
+                      {/* Tags */}
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {(loc.tags || []).slice(0, 3).map((t) => (
+                            <span
+                              key={t}
+                              className="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800 text-[10px] text-slate-400"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                          {(loc.tags || []).length > 3 && (
+                            <span className="text-[10px] text-slate-500">
+                              +{(loc.tags || []).length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </td>
 
-            <form onSubmit={handleSaveLocation} className="mt-4 space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Name (English) *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.name || ''}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Kannada Name</label>
-                  <input
-                    type="text"
-                    value={formData.kannadaName || ''}
-                    onChange={(e) => setFormData({ ...formData, kannadaName: e.target.value })}
-                    placeholder="e.g. ಪಾವಗಡ ಕೋಟೆ"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  />
-                </div>
-              </div>
+                      {/* Actions */}
+                      <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenView(loc)}
+                            title="View details"
+                            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                          >
+                            <Eye size={13} />
+                          </button>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Category *</label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none"
-                  >
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Status</label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none"
-                  >
-                    <option value="ACTIVE">ACTIVE (Published publicly)</option>
-                    <option value="DRAFT">DRAFT (Hidden from public)</option>
-                    <option value="INACTIVE">INACTIVE</option>
-                    <option value="ARCHIVED">ARCHIVED</option>
-                  </select>
-                </div>
-              </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(loc)}
+                            title="Edit place"
+                            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-emerald-400 hover:text-emerald-300 transition-colors"
+                          >
+                            <Edit2 size={13} />
+                          </button>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Summary (1-2 sentences) *</label>
-                <textarea
-                  rows={2}
-                  required
-                  value={formData.summary || ''}
-                  onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                />
-              </div>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenVerify(loc)}
+                            title="Quick verify"
+                            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-amber-400 hover:text-amber-300 transition-colors"
+                          >
+                            <ShieldCheck size={13} />
+                          </button>
 
-              {/* Geographic Coordinates for Map */}
-              <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800">
-                <p className="text-xs font-bold text-emerald-400 mb-2 flex items-center gap-1.5">
-                  <MapPin size={14} />
-                  <span>Public Map Coordinates</span>
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Latitude (Decimal) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={formData.coordinates?.latitude ?? ''}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          coordinates: {
-                            ...(formData.coordinates || { longitude: 77.2798 }),
-                            latitude: parseFloat(e.target.value),
-                          },
-                        })
-                      }
-                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Longitude (Decimal) *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={formData.coordinates?.longitude ?? ''}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          coordinates: {
-                            ...(formData.coordinates || { latitude: 14.1025 }),
-                            longitude: parseFloat(e.target.value),
-                          },
-                        })
-                      }
-                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Elevation (Meters)</label>
-                    <input
-                      type="number"
-                      value={formData.coordinates?.elevationMeters ?? ''}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          coordinates: {
-                            ...(formData.coordinates || { latitude: 14.1025, longitude: 77.2798 }),
-                            elevationMeters: e.target.value ? parseInt(e.target.value) : undefined,
-                          },
-                        })
-                      }
-                      placeholder="e.g. 846"
-                      className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs font-mono text-white"
-                    />
-                  </div>
-                </div>
-              </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDuplicate(loc)}
+                            title="Duplicate as draft"
+                            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+                          >
+                            <Copy size={13} />
+                          </button>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Address</label>
-                <input
-                  type="text"
-                  value={formData.address || ''}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white focus:outline-none"
-                />
-              </div>
+                          <button
+                            type="button"
+                            onClick={() => handleArchive(loc)}
+                            title="Archive record"
+                            className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-rose-400 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Operating Hours</label>
-                  <input
-                    type="text"
-                    value={formData.hours?.open ? `${formData.hours.open} – ${formData.hours.close}` : ''}
-                    onChange={(e) => setFormData({ ...formData, hours: { ...(formData.hours || {}), open: e.target.value, close: '', days: 'Daily' } })}
-                    placeholder="e.g. 06:00 AM – 06:00 PM"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Contact Phone</label>
-                  <input
-                    type="text"
-                    value={formData.contact?.phone || ''}
-                    onChange={(e) => setFormData({ ...formData, contact: { ...(formData.contact || {}), phone: e.target.value } })}
-                    placeholder="e.g. 08136-244240"
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="pdfAuth"
-                  checked={formData.isPdfAuthoritative || false}
-                  onChange={(e) => setFormData({ ...formData, isPdfAuthoritative: e.target.checked })}
-                  className="rounded border-slate-700 bg-slate-950 text-emerald-500 focus:ring-0"
-                />
-                <label htmlFor="pdfAuth" className="text-xs text-slate-300">
-                  Verified from Primary Source / Archaeological Survey Document
-                </label>
-              </div>
-
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-semibold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="px-5 py-2 bg-forest hover:bg-forest-light text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-forest/40 disabled:opacity-50"
-                >
-                  {isSaving && <Loader2 size={14} className="animate-spin" />}
-                  <span>{editingLocation ? 'Save Changes' : 'Publish Location'}</span>
-                </button>
-              </div>
-            </form>
+          <div className="p-3 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-500 px-4">
+            <span>
+              Showing <strong className="text-white">{locations.length}</strong> records
+            </span>
+            <span>Namma Pavagada Verified Directory CMS</span>
           </div>
         </div>
       )}
+
+      {/* 10-Step Creation & Editing Modal */}
+      <PlaceEntryModal
+        isOpen={isEntryModalOpen}
+        onClose={() => setIsEntryModalOpen(false)}
+        initialData={selectedLocationForEdit}
+        onSaved={(saved) => {
+          showToast(`Successfully saved "${saved.name}".`);
+          fetchLocations();
+        }}
+      />
+
+      {/* View Details Modal */}
+      <PlaceDetailsModal
+        isOpen={isDetailsModalOpen}
+        location={selectedLocationForView}
+        onClose={() => setIsDetailsModalOpen(false)}
+        onEdit={(loc) => {
+          setSelectedLocationForEdit(loc);
+          setIsEntryModalOpen(true);
+        }}
+        onVerify={(loc) => {
+          setSelectedLocationForVerify(loc);
+          setIsVerifyModalOpen(true);
+        }}
+      />
+
+      {/* 1-Click Verification Modal */}
+      <QuickVerifyModal
+        isOpen={isVerifyModalOpen}
+        location={selectedLocationForVerify}
+        onClose={() => setIsVerifyModalOpen(false)}
+        onVerified={(updated) => {
+          showToast(`Updated verification for "${updated.name}".`);
+          fetchLocations();
+        }}
+      />
     </div>
   );
 };

@@ -13,10 +13,11 @@ export type RootStackParamList = {
   Auth: undefined;
   Main: NavigatorScreenParams<MainTabParamList>;
   CategorySelect: undefined;
-  SubcategorySelect: { categoryId: string };
+  SubcategorySelect: { categoryId: string; initialSelectedIds?: string[] };
   PlaceForm: {
     categoryId?: string;
     subcategoryId?: string;
+    subcategoryIds?: string[];
     placeId?: string;
     isEdit?: boolean;
   };

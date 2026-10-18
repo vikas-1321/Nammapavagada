@@ -16,7 +16,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { adminApi } from '../services/api';
-import { BusRoute, BusStop, BusTiming, RouteStop } from '../types';
+import { BusRoute, BusStop, BusTiming, RouteStop, PlaceStatus } from '../types';
 
 export const BusesPage: React.FC = () => {
   const [routes, setRoutes] = useState<BusRoute[]>([]);
@@ -51,7 +51,7 @@ export const BusesPage: React.FC = () => {
     operator: 'KSRTC',
     frequencyNote: '',
     statusNote: '',
-    status: 'ACTIVE' as 'ACTIVE' | 'INACTIVE' | 'DRAFT' | 'ARCHIVED',
+    status: 'ACTIVE' as PlaceStatus,
     isTimetableLive: false,
   });
 

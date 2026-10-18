@@ -9,4 +9,5 @@ Werkzeug==3.0.3
 marshmallow==3.21.3
 pytest==8.2.2
 psycopg2-binary==2.9.9
+psycopg[binary]==3.1.19
 gunicorn==22.0.0

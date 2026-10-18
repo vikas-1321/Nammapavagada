@@ -1,3 +1,11 @@
+/**
+ * Namma Pavagada - Historical Archive Service
+ * Historical eras, fort structures, and academic documentation.
+ * Interfaces with backend endpoints:
+ *   - GET /api/history/eras
+ *   - GET /api/history/places
+ */
+
 import {
   HISTORICAL_ERAS,
   FORT_STRUCTURES,
@@ -18,12 +26,38 @@ class HistoryService {
 
   constructor() {
     this.refreshFromApi();
+    apiClient.onRevalidate(() => {
+      this.refreshFromApi().catch(() => {});
+    });
   }
 
   public async refreshFromApi(): Promise<void> {
-    const remoteEras = await apiClient.get<HistoricalEra[]>('/history/eras');
-    if (remoteEras && Array.isArray(remoteEras) && remoteEras.length > 0) {
-      this.eras = remoteEras;
+    try {
+      const [remoteEras, remotePlaces] = await Promise.allSettled([
+        apiClient.get<HistoricalEra[]>('/history/eras'),
+        apiClient.get<any[]>('/history/places'),
+      ]);
+
+      if (remoteEras.status === 'fulfilled' && Array.isArray(remoteEras.value) && remoteEras.value.length > 0) {
+        this.eras = remoteEras.value;
+      }
+
+      if (remotePlaces.status === 'fulfilled' && Array.isArray(remotePlaces.value) && remotePlaces.value.length > 0) {
+        this.structures = remotePlaces.value.map((p: any) => ({
+          id: String(p.id || `fort-${Math.random()}`),
+          name: p.name || 'Fort Structure',
+          kannadaName: p.kannadaName,
+          classification: (p.classification === 'RELIGIOUS' || p.classification === 'ROYAL') ? p.classification : 'DEFENSE',
+          historicalPeriod: p.historicalPeriod || 'Palegara Era (16th–18th Century)',
+          builder: p.builder || undefined,
+          architecturalHighlights: Array.isArray(p.architecturalHighlights) ? p.architecturalHighlights : [p.description || 'Historic granite rampart'].filter(Boolean),
+          currentCondition: p.currentCondition || p.conservationStatus || 'Fair',
+          conservationAction: p.conservationAction || 'Periodic clearance and documentation',
+          sourceReference: p.sourceReference || 'Karnataka State Gazetteer / ASI Survey',
+        }));
+      }
+    } catch (e) {
+      console.warn('[HistoryService] History sync failed:', e);
     }
   }
 

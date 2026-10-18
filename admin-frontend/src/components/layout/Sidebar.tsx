@@ -4,9 +4,6 @@ import {
   MapPin,
   Tag,
   Bus,
-  Building2,
-  GraduationCap,
-  Film,
   Landmark,
   Image as ImageIcon,
   Search,
@@ -23,9 +20,6 @@ export type AdminTab =
   | 'locations'
   | 'categories'
   | 'buses'
-  | 'hospitals'
-  | 'education'
-  | 'theatres'
   | 'history'
   | 'photos'
   | 'search'
@@ -44,12 +38,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange }) => 
 
   const navItems: Array<{ id: AdminTab; label: string; icon: React.ReactNode; superAdminOnly?: boolean }> = [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={18} /> },
-    { id: 'locations', label: 'Locations', icon: <MapPin size={18} /> },
+    { id: 'locations', label: 'Locations & Services', icon: <MapPin size={18} /> },
     { id: 'categories', label: 'Categories', icon: <Tag size={18} /> },
     { id: 'buses', label: 'Bus Routes & Stops', icon: <Bus size={18} /> },
-    { id: 'hospitals', label: 'Hospitals', icon: <Building2 size={18} /> },
-    { id: 'education', label: 'Schools & Colleges', icon: <GraduationCap size={18} /> },
-    { id: 'theatres', label: 'Theatres & Shows', icon: <Film size={18} /> },
     { id: 'history', label: 'Historical Content', icon: <Landmark size={18} /> },
     { id: 'photos', label: 'Photos / Media (S3)', icon: <ImageIcon size={18} /> },
     { id: 'search', label: 'Unified Search', icon: <Search size={18} /> },

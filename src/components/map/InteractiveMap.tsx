@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import { LocationDetail, LocationCategory } from '../../types/location';
 import { locationService } from '../../services/locationService';
 import { formatCoordinates } from '../../utils/formatting';
-import { CATEGORY_REGISTRY } from '../../data/categoriesData';
+import { CATEGORY_REGISTRY, CategoryDefinition } from '../../data/categoriesData';
 import { LocationDetailModal } from '../locations/LocationDetailModal';
 import {
   Map as MapIcon,
@@ -17,6 +17,7 @@ import {
   MapPin,
   ChevronDown,
   Mountain,
+  RotateCw,
 } from 'lucide-react';
 
 // Fix Leaflet default icon asset paths in Vite / bundlers
@@ -74,14 +75,64 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
   const [baseStyle, setBaseStyle] = useState<BaseMapStyle>('osm');
   const [isMapReady, setIsMapReady] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
-  const categories = locationService.getCategories();
+  const [categories, setCategories] = useState<CategoryDefinition[]>(() => locationService.getCategories());
+  const [locations, setLocations] = useState<LocationDetail[]>(() => locationService.getLocations());
 
-  const filteredLocations = locationService.getLocations({
-    category: activeCategory,
-    searchQuery: searchQuery,
+  // Proactively fetch locations from backend API
+  const refreshMapLocations = useCallback(async (force = false) => {
+    setIsLoading(true);
+    try {
+      const res = await locationService.getLocationsAsync({ limit: 200 }, { forceRefresh: force });
+      setLocations(res.items);
+      setCategories(locationService.getCategories());
+    } catch (err) {
+      console.warn('[InteractiveMap] Map locations sync failed:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshMapLocations();
+  }, [refreshMapLocations]);
+
+  // Subscribe to service updates (revalidation)
+  useEffect(() => {
+    const unsubscribe = locationService.subscribe(() => {
+      setLocations(locationService.getLocations());
+      setCategories(locationService.getCategories());
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Filter locations by active category and search query
+  const filteredLocations = locations.filter((loc) => {
+    if (activeCategory !== 'ALL' && loc.category !== activeCategory) {
+      return false;
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const matchName = loc.name?.toLowerCase().includes(q);
+      const matchKn = loc.kannadaName?.toLowerCase().includes(q);
+      const matchSum = loc.summary?.toLowerCase().includes(q);
+      const matchTag = loc.tags?.some((t) => t.toLowerCase().includes(q));
+      if (!matchName && !matchKn && !matchSum && !matchTag) return false;
+    }
+    return true;
   });
+
+  // Only render markers for records with valid coordinates
+  const validCoordinateLocations = filteredLocations.filter(
+    (loc) =>
+      loc.coordinates &&
+      loc.coordinates.latitude != null &&
+      loc.coordinates.longitude != null &&
+      !isNaN(loc.coordinates.latitude) &&
+      !isNaN(loc.coordinates.longitude)
+  );
 
   // Close map category dropdown on outside click
   useEffect(() => {
@@ -133,7 +184,6 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
     const timer3 = setTimeout(triggerInvalidate, 750);
     const timer4 = setTimeout(triggerInvalidate, 1500);
 
-    // ResizeObserver ensures continuous responsiveness
     const resizeObserver = new ResizeObserver(() => {
       map.invalidateSize();
     });
@@ -171,14 +221,14 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
     newLayer.bringToBack();
   }, [baseStyle]);
 
-  // 3. Render Markers & Popups whenever filteredLocations or selectedLocation changes
+  // 3. Render Markers & Popups whenever validCoordinateLocations or selectedLocation changes
   useEffect(() => {
     if (!mapInstanceRef.current || !markersLayerRef.current) return;
 
     markersLayerRef.current.clearLayers();
     markerInstancesRef.current.clear();
 
-    filteredLocations.forEach((loc) => {
+    validCoordinateLocations.forEach((loc) => {
       const isSelected = selectedLocation?.id === loc.id;
       const isSolar = loc.category === 'SOLAR_INFRASTRUCTURE';
       const isHeritage = loc.category === 'FORT_HERITAGE' || loc.category === 'MEGALITHIC_SITE';
@@ -239,9 +289,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
       const popupHtml = `
         <div class="font-sans text-xs p-1 min-w-[220px] max-w-[280px]">
           <div class="flex items-center justify-between gap-2 mb-1">
-            <span class="font-mono text-[10px] text-terracotta font-bold uppercase tracking-wider">${loc.code}</span>
+            <span class="font-mono text-[10px] text-terracotta font-bold uppercase tracking-wider">${loc.code || 'PVG-LOC'}</span>
             <span class="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-forest-green text-warm-cream">
-              ${loc.category.replace('_', ' ')}
+              ${(loc as any).categoryName || loc.category.replace('_', ' ')}
             </span>
           </div>
           <h4 class="font-serif font-bold text-sm text-black leading-snug mb-0.5">${loc.name}</h4>
@@ -289,11 +339,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
 
     // Invalidate size once markers are registered
     mapInstanceRef.current.invalidateSize();
-  }, [filteredLocations, selectedLocation]);
+  }, [validCoordinateLocations, selectedLocation]);
 
   // 4. Pan to selected location
   useEffect(() => {
-    if (selectedLocation && mapInstanceRef.current) {
+    if (selectedLocation && mapInstanceRef.current && selectedLocation.coordinates?.latitude != null && selectedLocation.coordinates?.longitude != null) {
       mapInstanceRef.current.flyTo(
         [selectedLocation.coordinates.latitude, selectedLocation.coordinates.longitude],
         selectedLocation.category === 'SOLAR_INFRASTRUCTURE' ? 12 : 15,
@@ -323,7 +373,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
   // Handle clicking location card from sidebar
   const handleSelectFromList = (loc: LocationDetail) => {
     setSelectedLocation(loc);
-    if (mapInstanceRef.current) {
+    if (mapInstanceRef.current && loc.coordinates?.latitude != null && loc.coordinates?.longitude != null) {
       mapInstanceRef.current.flyTo(
         [loc.coordinates.latitude, loc.coordinates.longitude],
         loc.category === 'SOLAR_INFRASTRUCTURE' ? 12 : 15,
@@ -337,12 +387,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fadeIn">
       {/* Top Map Filter & Search HUD */}
       <div className="bg-white border border-soft-sand rounded-2xl p-4 md:p-5 shadow-xs">
         <div className="grid grid-cols-12 gap-3 items-center">
           {/* Search box */}
-          <div className="col-span-12 md:col-span-7 lg:col-span-8 relative">
+          <div className="col-span-12 md:col-span-6 lg:col-span-7 relative">
             <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-forest-green/60" />
             <input
               type="text"
@@ -354,7 +404,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
           </div>
 
           {/* Category Filter Dropdown */}
-          <div className="col-span-12 md:col-span-5 lg:col-span-4 relative" ref={categoryDropdownRef}>
+          <div className="col-span-10 md:col-span-5 lg:col-span-4 relative" ref={categoryDropdownRef}>
             <button
               type="button"
               onClick={() => setIsCategoryOpen(!isCategoryOpen)}
@@ -366,12 +416,12 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
                 <span className="truncate font-medium">
                   {activeCategory === 'ALL'
                     ? 'All Categories'
-                    : categories.find((c) => c.id === activeCategory)?.name}
+                    : categories.find((c) => c.id === activeCategory)?.name || activeCategory}
                 </span>
               </div>
               <div className="flex items-center gap-1 shrink-0">
                 <span className="font-mono text-[10px] bg-forest-green text-white font-bold px-1.5 py-0.2 rounded-full">
-                  {filteredLocations.length}
+                  {validCoordinateLocations.length}
                 </span>
                 <ChevronDown
                   className={`w-3.5 h-3.5 text-muted-text transition-transform duration-200 ${
@@ -395,13 +445,13 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
                     }`}
                   >
                     <span>All Categories</span>
-                    <span className="font-mono text-[10px]">{locationService.getLocations().length}</span>
+                    <span className="font-mono text-[10px]">{locations.length}</span>
                   </button>
                 </div>
                 <div className="p-1 space-y-0.5">
                   {categories.map((cat) => {
                     const isSelected = activeCategory === cat.id;
-                    const count = locationService.getLocations({ category: cat.id }).length;
+                    const count = locations.filter((l) => l.category === cat.id).length;
                     return (
                       <button
                         key={cat.id}
@@ -423,12 +473,24 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
               </div>
             )}
           </div>
+
+          {/* Refresh Button */}
+          <div className="col-span-2 md:col-span-1 flex justify-end">
+            <button
+              type="button"
+              onClick={() => refreshMapLocations(true)}
+              className="p-2 bg-white border border-soft-sand hover:bg-warm-cream rounded-xl text-forest-green shadow-xs transition-colors cursor-pointer"
+              title="Refresh map markers from backend"
+            >
+              <RotateCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Main Map + Sidebar Split (12-Columns) */}
       <div className="grid grid-cols-12 gap-6 items-start">
-        {/* Leaflet Container with rounded-2xl and warm border */}
+        {/* Leaflet Container */}
         <div className="col-span-12 lg:col-span-8 border border-soft-sand rounded-2xl bg-warm-cream/30 relative h-[560px] md:h-[640px] overflow-hidden shadow-sm flex flex-col">
           {/* Top Spatial HUD Controls Overlay */}
           <div className="absolute top-4 left-4 right-16 z-[1000] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
@@ -438,7 +500,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
               <span>14.1025° N, 77.2798° E · PAVAGADA TALUK</span>
             </div>
 
-            {/* Quick Action Buttons (Fit Bounds, Recenter, Style Switcher) */}
+            {/* Quick Action Buttons */}
             <div className="flex items-center gap-1.5 pointer-events-auto bg-white/90 backdrop-blur-md p-1 rounded-xl border border-soft-sand shadow-md">
               {/* Style Switcher */}
               {(['osm', 'satellite', 'terrain'] as BaseMapStyle[]).map((style) => (
@@ -496,11 +558,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
           />
 
           {/* Map Loading Fallback Indicator */}
-          {!isMapReady && (
-            <div className="absolute inset-0 bg-warm-cream flex items-center justify-center z-10">
-              <div className="flex flex-col items-center gap-2 text-forest-green">
+          {(!isMapReady || isLoading) && (
+            <div className="absolute inset-0 bg-warm-cream/60 backdrop-blur-xs flex items-center justify-center z-10">
+              <div className="flex flex-col items-center gap-2 text-forest-green bg-white p-5 rounded-2xl border border-soft-sand shadow-lg">
                 <div className="w-8 h-8 border-3 border-terracotta border-t-transparent rounded-full animate-spin"></div>
-                <span className="font-serif font-bold text-sm">Rendering Geospatial Canvas...</span>
+                <span className="font-serif font-bold text-sm">Synchronizing Map Markers...</span>
               </div>
             </div>
           )}
@@ -511,7 +573,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
           <div className="border-b border-soft-sand p-4 bg-warm-cream/60 shrink-0 flex items-center justify-between">
             <div>
               <div className="text-xs uppercase font-bold tracking-wider text-forest-green">
-                Explorer Registry ({filteredLocations.length} Points)
+                Explorer Registry ({validCoordinateLocations.length} Points)
               </div>
               <div className="text-[11px] text-muted-text">
                 Select landmark to zoom & inspect telemetry
@@ -528,14 +590,19 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
 
           {/* Scrollable list */}
           <div className="overflow-y-auto divide-y divide-soft-sand/60 flex-1 p-2 space-y-1">
-            {filteredLocations.length === 0 ? (
-              <div className="p-8 text-center text-muted-text text-sm">
-                No landmarks found matching "{searchQuery}".
+            {validCoordinateLocations.length === 0 ? (
+              <div className="p-8 text-center text-muted-text text-sm space-y-2">
+                <div className="font-serif font-bold text-dark-text">No Markers Found</div>
+                <p className="text-xs text-muted-text">
+                  {searchQuery || activeCategory !== 'ALL'
+                    ? 'No registered places with geographic coordinates matched your filter criteria.'
+                    : 'No places with coordinates are currently recorded in the database.'}
+                </p>
               </div>
             ) : (
-              filteredLocations.map((loc) => {
+              validCoordinateLocations.map((loc) => {
                 const isSelected = selectedLocation?.id === loc.id;
-                const categoryDef = CATEGORY_REGISTRY[loc.category];
+                const categoryDef = (CATEGORY_REGISTRY as Record<string, any>)[loc.category];
 
                 return (
                   <div
@@ -549,7 +616,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-mono text-[10px] font-bold text-muted-text">
-                        {loc.code}
+                        {loc.code || 'PVG-LOC'}
                       </span>
                       <span
                         className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
@@ -574,9 +641,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({ initialSelectedL
                     <div className="font-mono text-[11px] text-muted-text mt-1.5 flex items-center justify-between">
                       <span className="flex items-center gap-1">
                         <MapPin className="w-3 h-3 text-terracotta shrink-0" />
-                        <span>{formatCoordinates(loc.coordinates.latitude, loc.coordinates.longitude)}</span>
+                        <span>{formatCoordinates(loc.coordinates?.latitude, loc.coordinates?.longitude)}</span>
                       </span>
-                      {loc.coordinates.elevationMeters && (
+                      {loc.coordinates?.elevationMeters != null && (
                         <span>{loc.coordinates.elevationMeters}m</span>
                       )}
                     </div>

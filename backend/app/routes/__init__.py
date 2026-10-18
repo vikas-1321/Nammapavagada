@@ -10,11 +10,13 @@ from app.routes.photo_routes import photo_bp
 from app.routes.search_routes import search_bp
 from app.routes.admin_routes import admin_bp
 from app.routes.health_routes import health_bp
+from app.routes.tag_routes import tag_bp
 
 def register_blueprints(app):
     app.register_blueprint(auth_bp)
     app.register_blueprint(category_bp)
     app.register_blueprint(location_bp)
+    app.register_blueprint(tag_bp)
     app.register_blueprint(bus_bp)
     app.register_blueprint(hospital_bp)
     app.register_blueprint(education_bp)

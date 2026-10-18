@@ -38,6 +38,7 @@ export interface PlaceFormScreenProps {
   editPlaceId?: string;
   initialCategory?: MainCategoryMeta;
   initialSubcategory?: SubcategoryMeta;
+  initialSubcategories?: SubcategoryMeta[];
   onSuccess?: (savedPlace: LocationItem) => void;
   onCancel?: () => void;
   onViewExisting?: (placeId: string) => void;
@@ -49,6 +50,7 @@ export const PlaceFormScreen: React.FC<PlaceFormScreenProps> = ({
   editPlaceId,
   initialCategory,
   initialSubcategory,
+  initialSubcategories,
   onSuccess,
   onCancel,
   onViewExisting,
@@ -60,24 +62,58 @@ export const PlaceFormScreen: React.FC<PlaceFormScreenProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const categoryIdParam = route?.params?.categoryId;
-  const subcategoryIdParam = route?.params?.subcategoryId;
+  const subcategoryIdParam = route?.params?.subcategoryId as string | undefined;
+  const subcategoryIdsParam = route?.params?.subcategoryIds as string[] | undefined;
+
   const resolvedCategory =
     initialCategory ||
     (categoryIdParam ? MAIN_CATEGORIES_TAXONOMY.find((c) => c.id === categoryIdParam) : undefined);
-  const resolvedSubcategory =
-    initialSubcategory ||
-    (resolvedCategory && subcategoryIdParam
-      ? resolvedCategory.subcategories.find((s) => s.id === subcategoryIdParam)
-      : undefined);
+
+  const initialSubsList: SubcategoryMeta[] = (() => {
+    if (initialSubcategories && initialSubcategories.length > 0) return initialSubcategories;
+    if (initialSubcategory) return [initialSubcategory];
+    if (resolvedCategory) {
+      if (subcategoryIdsParam && subcategoryIdsParam.length > 0) {
+        return resolvedCategory.subcategories.filter((s) => subcategoryIdsParam.includes(s.id));
+      }
+      if (subcategoryIdParam) {
+        const found = resolvedCategory.subcategories.find((s) => s.id === subcategoryIdParam);
+        return found ? [found] : [];
+      }
+    }
+    return [];
+  })();
 
   const handleSuccess = onSuccess || ((savedPlace: LocationItem) => navigation?.goBack());
   const handleCancel = onCancel || (() => navigation?.goBack());
   const handleViewExisting =
     onViewExisting || ((candId: string) => navigation?.navigate('PlaceDetail', { placeId: candId }));
 
-  // Active Category & Subcategory
+  // Active Category & Subcategories
   const [category, setCategory] = useState<MainCategoryMeta | undefined>(resolvedCategory);
-  const [subcategory, setSubcategory] = useState<SubcategoryMeta | undefined>(resolvedSubcategory);
+  const [subcategories, setSubcategories] = useState<SubcategoryMeta[]>(initialSubsList);
+
+  // Sync subcategories if route params update (e.g. from SubcategorySelectScreen)
+  useEffect(() => {
+    if (route?.params?.subcategoryIds && category) {
+      const ids: string[] = route.params.subcategoryIds;
+      const matched = category.subcategories.filter((s) => ids.includes(s.id));
+      if (matched.length > 0) {
+        setSubcategories(matched);
+      }
+    }
+  }, [route?.params?.subcategoryIds, category]);
+
+  const handleToggleSubcategory = (sub: SubcategoryMeta) => {
+    setSubcategories((prev) => {
+      const exists = prev.some((s) => s.id === sub.id);
+      return exists ? prev.filter((s) => s.id !== sub.id) : [...prev, sub];
+    });
+  };
+
+  const allSuggestedTags = Array.from(
+    new Set(subcategories.flatMap((s) => s.suggestedTags || []))
+  );
 
   // Form State
   const [formData, setFormData] = useState<Partial<LocationItem>>({
@@ -102,7 +138,7 @@ export const PlaceFormScreen: React.FC<PlaceFormScreenProps> = ({
     },
     hours: { is24Hours: false },
     categoryData: {},
-    tags: initialSubcategory?.suggestedTags || [],
+    tags: allSuggestedTags.length > 0 ? allSuggestedTags : (initialSubcategory?.suggestedTags || []),
     verification: {
       status: 'PENDING',
       source: 'Admin Verification',
@@ -135,11 +171,29 @@ export const PlaceFormScreen: React.FC<PlaceFormScreenProps> = ({
         );
         if (matchedCat) {
           setCategory(matchedCat);
-          const matchedSub = matchedCat.subcategories.find(
-            (s) => s.id === place.subcategory || s.name === place.subcategory
-          );
-          if (matchedSub) {
-            setSubcategory(matchedSub);
+          if (place.subcategory) {
+            const rawSubs = place.subcategory
+              .split(',')
+              .map((s: string) => s.trim().toLowerCase())
+              .filter(Boolean);
+            const matchedSubs = matchedCat.subcategories.filter(
+              (s) =>
+                rawSubs.includes(s.id.toLowerCase()) ||
+                rawSubs.includes(s.name.toLowerCase())
+            );
+            if (matchedSubs.length > 0) {
+              setSubcategories(matchedSubs);
+            } else {
+              setSubcategories(
+                rawSubs.map((name: string) => ({
+                  id: name,
+                  name: name,
+                  description: '',
+                  formType: 'general' as const,
+                  suggestedTags: [],
+                }))
+              );
+            }
           }
         }
       } catch (err: any) {
@@ -207,10 +261,15 @@ export const PlaceFormScreen: React.FC<PlaceFormScreenProps> = ({
       return;
     }
 
+    const subcategoryString =
+      subcategories.length > 0
+        ? subcategories.map((s) => s.name).join(', ')
+        : formData.subcategory || '';
+
     const payload: Partial<LocationItem> = {
       ...formData,
       category: category?.name || formData.category || 'General',
-      subcategory: subcategory?.name || formData.subcategory || '',
+      subcategory: subcategoryString,
       status: targetStatus || formData.status || 'ACTIVE',
     };
 
@@ -244,7 +303,10 @@ export const PlaceFormScreen: React.FC<PlaceFormScreenProps> = ({
     );
   }
 
-  const formType = subcategory?.formType || 'general';
+  const formType =
+    subcategories.find((s) => s.formType && s.formType !== 'general')?.formType ||
+    subcategories[0]?.formType ||
+    'general';
 
   return (
     <KeyboardAvoidingView
@@ -286,9 +348,57 @@ export const PlaceFormScreen: React.FC<PlaceFormScreenProps> = ({
           <View style={styles.categoryInfo}>
             <Text style={styles.categoryLabel}>CATEGORY & DOMAIN</Text>
             <Text style={styles.categoryName}>{category?.name || formData.category}</Text>
-            <Text style={styles.subcategoryName}>
-              Type: {subcategory?.name || formData.subcategory || 'General'}
-            </Text>
+
+            <View style={styles.subcategoriesHeaderRow}>
+              <Text style={styles.subcategoryLabel}>
+                SUBCATEGORIES ({subcategories.length} SELECTED)
+              </Text>
+              <TouchableOpacity
+                onPress={() =>
+                  navigation?.navigate('SubcategorySelect', {
+                    categoryId: category?.id,
+                    initialSelectedIds: subcategories.map((s) => s.id),
+                  })
+                }
+              >
+                <Text style={styles.changeSubcategoriesText}>Manage →</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Quick toggle chips */}
+            <View style={styles.subcategoriesGrid}>
+              {category?.subcategories.map((sub) => {
+                const isSelected = subcategories.some(
+                  (s) => s.id === sub.id || s.name === sub.name
+                );
+                return (
+                  <TouchableOpacity
+                    key={sub.id}
+                    onPress={() => handleToggleSubcategory(sub)}
+                    style={[
+                      styles.subcategoryToggleChip,
+                      isSelected && {
+                        borderColor: category?.color?.primary || colors.primary,
+                        backgroundColor: '#f0fdf4',
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.subcategoryToggleChipText,
+                        isSelected && {
+                          color: category?.color?.primary || colors.primary,
+                          fontWeight: '700',
+                        },
+                      ]}
+                    >
+                      {isSelected ? '✓ ' : '+ '}
+                      {sub.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
           <StatusBadge status={formData.status || 'ACTIVE'} />
         </View>
@@ -360,11 +470,15 @@ export const PlaceFormScreen: React.FC<PlaceFormScreenProps> = ({
         {/* 2. Category-Specific Dynamic Form */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionHeader}>
-            2. {subcategory?.name || 'Category'} Specifics
+            2.{' '}
+            {subcategories.length > 0
+              ? subcategories.map((s) => s.name).join(', ')
+              : category?.name || 'Category'}{' '}
+            Specifics
           </Text>
           <CategoryFormDispatcher
             formType={formType}
-            subcategoryName={subcategory?.name || ''}
+            subcategoryName={subcategories.map((s) => s.name).join(', ')}
             categoryData={formData.categoryData || {}}
             onChange={(cData) => updateFormData({ categoryData: cData })}
           />
@@ -522,7 +636,7 @@ export const PlaceFormScreen: React.FC<PlaceFormScreenProps> = ({
           <TagSelector
             selectedTags={formData.tags || []}
             onChange={(tags) => updateFormData({ tags })}
-            suggestedTags={subcategory?.suggestedTags}
+            suggestedTags={allSuggestedTags}
           />
         </View>
 
@@ -728,6 +842,43 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primaryDark,
     marginTop: 1,
+  },
+  subcategoriesHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  subcategoryLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSubtle,
+    letterSpacing: 0.5,
+  },
+  changeSubcategoriesText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  subcategoriesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  subcategoryToggleChip: {
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSubtle,
+  },
+  subcategoryToggleChipText: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
   sectionCard: {
     backgroundColor: '#ffffff',

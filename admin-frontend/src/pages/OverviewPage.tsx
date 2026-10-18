@@ -54,10 +54,10 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ onNavigate }) => {
   const statCards = [
     { label: 'Total Locations', count: stats?.totalLocations || 0, icon: <MapPin className="text-emerald-400" />, tab: 'locations' as AdminTab, highlight: `${stats?.activeLocations || 0} Active` },
     { label: 'Bus Routes', count: stats?.totalBusRoutes || 0, icon: <Bus className="text-blue-400" />, tab: 'buses' as AdminTab, highlight: `${stats?.totalBusStops || 0} Stops` },
-    { label: 'Hospitals', count: stats?.totalHospitals || 0, icon: <Building2 className="text-rose-400" />, tab: 'hospitals' as AdminTab, highlight: '24/7 Casualty' },
-    { label: 'Schools', count: stats?.totalSchools || 0, icon: <GraduationCap className="text-amber-400" />, tab: 'education' as AdminTab, highlight: 'High Schools' },
-    { label: 'Colleges', count: stats?.totalColleges || 0, icon: <GraduationCap className="text-teal-400" />, tab: 'education' as AdminTab, highlight: 'Degrees / PU' },
-    { label: 'Theatres', count: stats?.totalTheatres || 0, icon: <Film className="text-purple-400" />, tab: 'theatres' as AdminTab, highlight: 'Live Shows' },
+    { label: 'Hospitals', count: stats?.totalHospitals || 0, icon: <Building2 className="text-rose-400" />, tab: 'locations' as AdminTab, highlight: 'Managed in Locations' },
+    { label: 'Schools', count: stats?.totalSchools || 0, icon: <GraduationCap className="text-amber-400" />, tab: 'locations' as AdminTab, highlight: 'Managed in Locations' },
+    { label: 'Colleges', count: stats?.totalColleges || 0, icon: <GraduationCap className="text-teal-400" />, tab: 'locations' as AdminTab, highlight: 'Managed in Locations' },
+    { label: 'Theatres', count: stats?.totalTheatres || 0, icon: <Film className="text-purple-400" />, tab: 'locations' as AdminTab, highlight: 'Managed in Locations' },
     { label: 'Historical Places', count: stats?.totalHistoricalPlaces || 0, icon: <Landmark className="text-amber-500" />, tab: 'history' as AdminTab, highlight: 'Survey Sources' },
     { label: 'Amazon S3 Photos', count: stats?.totalPhotos || 0, icon: <ImageIcon className="text-emerald-300" />, tab: 'photos' as AdminTab, highlight: 'Cloud Storage' },
   ];

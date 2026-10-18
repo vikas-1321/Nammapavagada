@@ -1,10 +1,13 @@
+from sqlalchemy import or_, and_
 from app.models.location import Location
+from app.models.category import Category
 from app.models.historical_place import HistoricalPlace
 from app.models.hospital import Hospital
 from app.models.education import EducationalInstitution
 from app.models.theatre import Theatre
 from app.models.bus_route import BusRoute
 from app.models.bus_stop import BusStop
+from app.models.tag import Tag
 
 class SearchService:
     def search_all(self, query: str, limit_per_entity: int = 10) -> dict:
@@ -24,20 +27,58 @@ class SearchService:
             }
 
         q = f"%{q_str}%"
+        tokens = [t.strip() for t in q_str.split() if t.strip()]
 
-        # 1. Locations
-        locs = (
-            Location.query.filter_by(status="ACTIVE")
-            .filter(
-                (Location.name.ilike(q))
-                | (Location.kannada_name.ilike(q))
-                | (Location.summary.ilike(q))
-                | (Location.address.ilike(q))
-                | (Location.tags_json.ilike(q))
+        # 1. Locations (CMS places)
+        loc_base_query = Location.query.filter(Location.status.in_(["ACTIVE", "PUBLISHED"]))
+        
+        # Build multi-token matching: each token can match name, category, subcategory, area, tags, or address
+        if len(tokens) > 1:
+            token_conditions = []
+            for tok in tokens:
+                tok_pat = f"%{tok}%"
+                token_conditions.append(
+                    (Location.name.ilike(tok_pat))
+                    | (Location.short_name.ilike(tok_pat))
+                    | (Location.kannada_name.ilike(tok_pat))
+                    | (Location.category_id.ilike(tok_pat))
+                    | (Location.category.has(Category.name.ilike(tok_pat)))
+                    | (Location.subcategory.ilike(tok_pat))
+                    | (Location.area.ilike(tok_pat))
+                    | (Location.summary.ilike(tok_pat))
+                    | (Location.address.ilike(tok_pat))
+                    | (Location.tags_json.ilike(tok_pat))
+                    | (Location.tag_objects.any(Tag.name.ilike(tok_pat)))
+                )
+            locs = loc_base_query.filter(and_(*token_conditions)).limit(limit_per_entity).all()
+            # If AND yields fewer results than limit, supplement with OR matches
+            if len(locs) < limit_per_entity:
+                existing_ids = {l.id for l in locs}
+                fallback_locs = loc_base_query.filter(
+                    or_(*token_conditions)
+                ).limit(limit_per_entity).all()
+                for fl in fallback_locs:
+                    if fl.id not in existing_ids and len(locs) < limit_per_entity:
+                        locs.append(fl)
+                        existing_ids.add(fl.id)
+        else:
+            locs = (
+                loc_base_query.filter(
+                    (Location.name.ilike(q))
+                    | (Location.short_name.ilike(q))
+                    | (Location.kannada_name.ilike(q))
+                    | (Location.category_id.ilike(q))
+                    | (Location.category.has(Category.name.ilike(q)))
+                    | (Location.subcategory.ilike(q))
+                    | (Location.area.ilike(q))
+                    | (Location.summary.ilike(q))
+                    | (Location.address.ilike(q))
+                    | (Location.tags_json.ilike(q))
+                    | (Location.tag_objects.any(Tag.name.ilike(q)))
+                )
+                .limit(limit_per_entity)
+                .all()
             )
-            .limit(limit_per_entity)
-            .all()
-        )
 
         # 2. Hospitals
         hosps = (

@@ -1,60 +1,221 @@
-import React, { useState } from 'react';
-import { TransitScheduleItem } from '../../types/service';
-import { Badge } from '../common/Badge';
-import { Bus, RotateCw, Search, X, MapPin, Clock, Star } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { TransitScheduleItem, TransitRouteStop, TransitTiming } from '../../types/service';
+import {
+  Bus,
+  MapPin,
+  Landmark,
+  BarChart2,
+  Clock,
+  ChevronDown,
+  Search,
+  X,
+  RotateCw,
+  AlertCircle,
+} from 'lucide-react';
 
 export interface TransitScheduleViewProps {
   routes: TransitScheduleItem[];
+  registeredStopsCount?: number;
   onRefresh?: () => Promise<void> | void;
   isRefreshing?: boolean;
   lastSyncedAt?: Date | null;
   isApiLoaded?: boolean;
+  isLoading?: boolean;
+  error?: string | null;
+  onBackToDirectory?: () => void;
 }
+
+// Clean helper to present station titles gracefully without repeating boilerplate
+const cleanStationTitle = (name: string): string => {
+  if (!name) return '';
+  return name
+    .replace(/\s*\(Kempegowda Bus Station \/ Majestic\)/gi, ' Majestic')
+    .replace(/\s*\(Majestic\)/gi, ' Majestic')
+    .replace(/\s*KSRTC Bus Station/gi, '')
+    .replace(/\s*Central Bus Stand/gi, '')
+    .replace(/\s*Bus Station/gi, '')
+    .replace(/\s*Bus Stand/gi, '')
+    .replace(/\s*Bus Stop/gi, '')
+    .trim();
+};
+
+// Calculate journey duration from arrival estimate minutes or timing departure/arrival
+const calculateJourneyDuration = (route: TransitScheduleItem): string | null => {
+  // 1. Check if the last sequenced stop has arrivalEstimateMinutes
+  if (route.stops && route.stops.length > 0) {
+    const sortedStops = [...route.stops].sort((a, b) => a.sequence - b.sequence);
+    const lastStop = sortedStops[sortedStops.length - 1];
+    if (lastStop.arrivalEstimateMinutes && lastStop.arrivalEstimateMinutes > 0) {
+      const hours = Math.floor(lastStop.arrivalEstimateMinutes / 60);
+      const mins = lastStop.arrivalEstimateMinutes % 60;
+      return hours > 0 ? `${hours}h ${mins > 0 ? `${mins}m` : '00m'}` : `${mins}m`;
+    }
+  }
+
+  // 2. Derive difference between departure and arrival in timings if available
+  if (route.timings && route.timings.length > 0) {
+    for (const t of route.timings) {
+      if (t.departureTime && t.arrivalTime) {
+        const parseTime = (timeStr: string) => {
+          const match = timeStr.trim().match(/(\d{1,2}):(\d{2})(?:\s*([APap][Mm]))?/);
+          if (!match) return null;
+          let hour = parseInt(match[1], 10);
+          const min = parseInt(match[2], 10);
+          const meridiem = match[3]?.toUpperCase();
+          if (meridiem === 'PM' && hour < 12) hour += 12;
+          if (meridiem === 'AM' && hour === 12) hour = 0;
+          return hour * 60 + min;
+        };
+
+        const depMin = parseTime(t.departureTime);
+        const arrMin = parseTime(t.arrivalTime);
+        if (depMin !== null && arrMin !== null) {
+          let diff = arrMin - depMin;
+          if (diff < 0) diff += 24 * 60; // Next-day arrival
+          if (diff > 0 && diff <= 18 * 60) {
+            const hours = Math.floor(diff / 60);
+            const mins = diff % 60;
+            return hours > 0 ? `${hours}h ${mins > 0 ? `${mins}m` : '00m'}` : `${mins}m`;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+};
+
+// Helper to format frequency note or service summary
+const getFrequencySummary = (route: TransitScheduleItem): string => {
+  if (route.frequencyNote && route.frequencyNote.trim()) {
+    // If frequency note is already concise, use directly; otherwise summarize
+    const note = route.frequencyNote.trim();
+    if (note.length <= 32) return note;
+    if (note.toLowerCase().includes('30 to 45 minutes')) return 'Every 30–45 min';
+    if (note.toLowerCase().includes('hourly')) return 'Every 60 min';
+    if (note.toLowerCase().includes('2 hours')) return 'Every 2 hours';
+  }
+
+  const tripCount = route.timings?.length || 0;
+  if (tripCount > 0) {
+    return `${tripCount} services daily`;
+  }
+
+  return 'Regular service';
+};
+
+// Format operational days string
+const formatOperatingDays = (dayType?: string): string => {
+  if (!dayType) return 'Daily';
+  const dt = dayType.toUpperCase();
+  if (dt === 'DAILY') return 'Daily';
+  if (dt === 'MON_SAT') return 'Mon–Sat';
+  if (dt === 'MON_FRI') return 'Mon–Fri';
+  if (dt === 'SUNDAY') return 'Sundays';
+  return dayType;
+};
 
 export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
   routes,
+  registeredStopsCount,
   onRefresh,
   isRefreshing = false,
   lastSyncedAt,
   isApiLoaded = false,
+  isLoading = false,
+  error = null,
 }) => {
   const [operatorFilter, setOperatorFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedRouteTimings, setExpandedRouteTimings] = useState<Record<string, boolean>>({});
 
-  // Compute total stops across all active routes
-  const totalStopsCount = routes.reduce((acc, r) => acc + (r.stops?.length || 0), 0);
+  // Calculate statistics from authentic backend data
+  const stats = useMemo(() => {
+    const activeCorridors = routes.length;
+
+    // Unique registered stops count: prefer prop or calculate unique stops
+    const uniqueStops = new Set<string>();
+    routes.forEach((r) => {
+      r.stops?.forEach((s) => {
+        if (s.stopName) uniqueStops.add(s.stopName);
+      });
+      if (r.source) uniqueStops.add(r.source);
+      if (r.destination) uniqueStops.add(r.destination);
+    });
+    const calculatedStopsCount = registeredStopsCount && registeredStopsCount > 0
+      ? registeredStopsCount
+      : uniqueStops.size;
+
+    // Major hubs: unique stops flagged as isMajorStop plus terminal anchors
+    const hubs = new Set<string>();
+    routes.forEach((r) => {
+      if (r.stops && r.stops.length > 0) {
+        r.stops.forEach((s) => {
+          if (s.isMajorStop) {
+            hubs.add(s.stopName || s.stopId);
+          }
+        });
+      }
+      if (r.source) hubs.add(r.source);
+      if (r.destination) hubs.add(r.destination);
+    });
+
+    // Total daily departures across all active routes
+    const dailyTrips = routes.reduce((acc, r) => acc + (r.timings?.length || 0), 0);
+
+    return {
+      activeCorridors,
+      registeredStops: calculatedStopsCount,
+      majorHubs: hubs.size,
+      dailyTrips,
+    };
+  }, [routes, registeredStopsCount]);
+
+  // Available operator filters based on actual data
+  const availableOperators = useMemo(() => {
+    const ops = new Set<string>();
+    routes.forEach((r) => {
+      if (r.operator) {
+        ops.add(r.operator.toUpperCase());
+      }
+    });
+    return ops;
+  }, [routes]);
 
   // Filter routes based on operator tab and search query
-  const filteredRoutes = routes.filter((route) => {
-    // Operator filter
-    if (operatorFilter !== 'ALL') {
-      const op = (route.operator || '').toUpperCase();
-      if (operatorFilter === 'KSRTC' && op !== 'KSRTC') return false;
-      if (operatorFilter === 'APSRTC' && op !== 'APSRTC') return false;
-      if (operatorFilter === 'PRIVATE' && op !== 'PRIVATE') return false;
-      if (operatorFilter === 'RAILWAYS' && !op.includes('RAIL')) return false;
-    }
-
-    // Search query filter (matches route code, source, destination, via, stops)
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const codeMatch = route.routeCode?.toLowerCase().includes(q);
-      const srcMatch = route.source?.toLowerCase().includes(q);
-      const destMatch = route.destination?.toLowerCase().includes(q);
-      const viaMatch = route.via?.some((v) => v.toLowerCase().includes(q));
-      const stopMatch = route.stops?.some(
-        (s) =>
-          s.stopName?.toLowerCase().includes(q) ||
-          (s.kannadaName && s.kannadaName.toLowerCase().includes(q))
-      );
-      if (!codeMatch && !srcMatch && !destMatch && !viaMatch && !stopMatch) {
-        return false;
+  const filteredRoutes = useMemo(() => {
+    return routes.filter((route) => {
+      // Operator filter
+      if (operatorFilter !== 'ALL') {
+        const op = (route.operator || '').toUpperCase();
+        if (operatorFilter === 'KSRTC' && op !== 'KSRTC') return false;
+        if (operatorFilter === 'APSRTC' && op !== 'APSRTC') return false;
+        if (operatorFilter === 'PRIVATE' && op !== 'PRIVATE') return false;
+        if (operatorFilter === 'RAILWAYS' && !op.includes('RAIL')) return false;
       }
-    }
 
-    return true;
-  });
+      // Search query filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const codeMatch = route.routeCode?.toLowerCase().includes(q);
+        const srcMatch = route.source?.toLowerCase().includes(q);
+        const destMatch = route.destination?.toLowerCase().includes(q);
+        const opMatch = route.operator?.toLowerCase().includes(q);
+        const viaMatch = route.via?.some((v) => v.toLowerCase().includes(q));
+        const stopMatch = route.stops?.some(
+          (s) =>
+            s.stopName?.toLowerCase().includes(q) ||
+            (s.kannadaName && s.kannadaName.toLowerCase().includes(q))
+        );
+
+        if (!codeMatch && !srcMatch && !destMatch && !viaMatch && !stopMatch && !opMatch) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [routes, operatorFilter, searchQuery]);
 
   const toggleTimings = (routeId: string) => {
     setExpandedRouteTimings((prev) => ({
@@ -63,385 +224,508 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
     }));
   };
 
+  // Loading Skeleton State
+  if (isLoading && routes.length === 0) {
+    return (
+      <div className="space-y-8 animate-pulse">
+        <div className="h-10 bg-slate-200/80 rounded-xl w-64" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-28 bg-white rounded-2xl border border-slate-200 p-5" />
+          ))}
+        </div>
+        <div className="h-14 bg-white rounded-2xl border border-slate-200" />
+        <div className="space-y-4">
+          {[1, 2].map((i) => (
+            <div key={i} className="h-64 bg-white rounded-3xl border border-slate-200" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Error State with Retry
+  if (error && routes.length === 0) {
+    return (
+      <div className="bg-white border border-red-200 rounded-3xl p-8 md:p-12 text-center space-y-4 max-w-xl mx-auto shadow-sm">
+        <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h3 className="text-lg font-serif font-bold text-slate-900">Unable to Load Transit Corridors</h3>
+        <p className="text-sm text-slate-600 leading-relaxed font-sans">{error}</p>
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={() => onRefresh()}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-forest-green text-white text-sm font-semibold rounded-xl hover:bg-forest-green-dark transition-colors cursor-pointer shadow-sm"
+          >
+            <RotateCw className="w-4 h-4" />
+            <span>Retry Connection</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Network Header with Live Status & Refresh Trigger */}
-      <div className="bg-white p-5 rounded-2xl border border-soft-sand shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1.5">
-              <Bus className="w-5 h-5 text-forest-green shrink-0" />
-              <h4 className="text-xs uppercase tracking-wider font-bold text-forest-green">
-                Public Transit Network · Pavagada Central Station & Taluk Corridors
-              </h4>
-              <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
-                  isApiLoaded
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                    : 'bg-amber-50 text-amber-700 border border-amber-200'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isApiLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
-                  }`}
-                />
-                {isApiLoaded ? 'Live API Connected' : 'Cached Timetable'}
-              </span>
-            </div>
-            <p className="text-xs md:text-sm text-muted-text leading-relaxed font-sans">
-              Interstate and regional transit schedules connecting Pavagada with Bengaluru, Tumakuru, Bellary, and Rayadurga.
-              Route paths, ordered stop sequences, and departure timetables are maintained by administrative transport desks.
-            </p>
+    <div className="space-y-8 animate-fadeIn">
+      {/* =========================================================================
+          SECTION 1: PAGE HEADER & TRANSPORT OVERVIEW (Screenshot 3 Reference)
+      ========================================================================== */}
+      <div className="space-y-4">
+        {/* Eyebrow & Status Row */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Bus className="w-4 h-4 text-emerald-600 stroke-[2.2]" />
+            <span className="text-xs font-bold text-emerald-600 tracking-widest uppercase font-sans">
+              MOVE ACROSS THE REGION
+            </span>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-            {lastSyncedAt && (
-              <span className="text-[11px] font-mono text-muted-text hidden sm:inline">
-                Synced: {lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
+          <div className="flex items-center gap-3">
+            <span
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold ${
+                isApiLoaded
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isApiLoaded ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                }`}
+              />
+              {isApiLoaded ? 'Live API Connected' : 'Syncing Live...'}
+            </span>
+
             {onRefresh && (
               <button
                 type="button"
                 onClick={() => onRefresh()}
                 disabled={isRefreshing}
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-warm-cream hover:bg-soft-sand text-dark-text text-xs font-semibold rounded-xl border border-soft-sand transition-colors shadow-xs disabled:opacity-50 cursor-pointer"
-                title="Refresh routes and stops from live server"
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
+                title="Refresh routes from server"
               >
                 <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                <span>{isRefreshing ? 'Syncing...' : 'Sync Timetables'}</span>
+                <span className="hidden sm:inline">{isRefreshing ? 'Syncing...' : 'Sync'}</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Live Metrics Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-soft-sand/70 text-center">
-          <div className="bg-warm-cream/50 p-2.5 rounded-xl border border-soft-sand/50">
-            <span className="text-[11px] uppercase tracking-wider text-muted-text block">Active Corridors</span>
-            <span className="text-lg font-serif font-bold text-forest-green">{routes.length}</span>
-          </div>
-          <div className="bg-warm-cream/50 p-2.5 rounded-xl border border-soft-sand/50">
-            <span className="text-[11px] uppercase tracking-wider text-muted-text block">Registered Stops</span>
-            <span className="text-lg font-serif font-bold text-forest-green">{totalStopsCount}</span>
-          </div>
-          <div className="bg-warm-cream/50 p-2.5 rounded-xl border border-soft-sand/50">
-            <span className="text-[11px] uppercase tracking-wider text-muted-text block">Major Hubs</span>
-            <span className="text-lg font-serif font-bold text-terracotta">
-              {routes.reduce((acc, r) => acc + (r.stops?.filter((s) => s.isMajorStop).length || 0), 0)}
+        {/* Main Title */}
+        <div>
+          <h1 className="font-serif text-3xl md:text-5xl font-bold text-slate-900 tracking-tight">
+            Bus &amp; Transport
+          </h1>
+          <p className="font-kannada text-xs md:text-sm text-slate-500 mt-1 font-normal">
+            ಬಸ್ ಮತ್ತು ಸಾರಿಗೆ ವ್ಯವಸ್ಥೆ · Pavagada Central Station &amp; Interstate Corridors
+          </p>
+        </div>
+
+        {/* Responsive Statistics Section with 4 Cards (Screenshot 3 Reference) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+          {/* Card 1: Active Corridors */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs hover:border-slate-300 transition-colors flex flex-col justify-center">
+            <span className="text-3xl md:text-4xl font-bold text-slate-900 font-sans tracking-tight">
+              {stats.activeCorridors < 10 ? `0${stats.activeCorridors}` : stats.activeCorridors}
             </span>
+            <span className="text-sm font-medium text-slate-500 mt-1">Active corridors</span>
           </div>
-          <div className="bg-warm-cream/50 p-2.5 rounded-xl border border-soft-sand/50">
-            <span className="text-[11px] uppercase tracking-wider text-muted-text block">Daily Trips</span>
-            <span className="text-lg font-serif font-bold text-forest-green">
-              {routes.reduce((acc, r) => acc + (r.timings?.length || 0), 0)}
-            </span>
+
+          {/* Card 2: Registered Stops */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs hover:border-slate-300 transition-colors flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
+              <MapPin className="w-6 h-6 stroke-[2]" />
+            </div>
+            <div>
+              <span className="text-3xl md:text-4xl font-bold text-slate-900 font-sans tracking-tight block">
+                {stats.registeredStops < 10 ? `0${stats.registeredStops}` : stats.registeredStops}
+              </span>
+              <span className="text-sm font-medium text-slate-500">Registered stops</span>
+            </div>
+          </div>
+
+          {/* Card 3: Major Hubs */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs hover:border-slate-300 transition-colors flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+              <Landmark className="w-6 h-6 stroke-[2]" />
+            </div>
+            <div>
+              <span className="text-3xl md:text-4xl font-bold text-slate-900 font-sans tracking-tight block">
+                {stats.majorHubs < 10 ? `0${stats.majorHubs}` : stats.majorHubs}
+              </span>
+              <span className="text-sm font-medium text-slate-500">Major hubs</span>
+            </div>
+          </div>
+
+          {/* Card 4: Daily Trips */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-xs hover:border-slate-300 transition-colors flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+              <BarChart2 className="w-6 h-6 stroke-[2]" />
+            </div>
+            <div>
+              <span className="text-3xl md:text-4xl font-bold text-slate-900 font-sans tracking-tight block">
+                {stats.dailyTrips < 10 ? `0${stats.dailyTrips}` : stats.dailyTrips}
+              </span>
+              <span className="text-sm font-medium text-slate-500">Daily trips</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-soft-sand shadow-xs">
-        {/* Operator Filter Tabs */}
-        <div className="flex flex-wrap gap-1.5">
-          {[
-            { id: 'ALL', label: 'All Corridors' },
-            { id: 'KSRTC', label: 'KSRTC' },
-            { id: 'APSRTC', label: 'APSRTC' },
-            { id: 'PRIVATE', label: 'Private' },
-            { id: 'RAILWAYS', label: 'Rail' },
-          ].map((op) => (
-            <button
-              key={op.id}
-              type="button"
-              onClick={() => setOperatorFilter(op.id)}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all ${
-                operatorFilter === op.id
-                  ? 'bg-forest-green text-white border-forest-green shadow-xs'
-                  : 'bg-warm-cream text-dark-text border-soft-sand hover:bg-soft-sand'
-              }`}
-            >
-              {op.label}
-            </button>
-          ))}
+      {/* =========================================================================
+          SECTION 2: NETWORK DIRECTORY & FILTER BAR (Screenshot 3 Reference)
+      ========================================================================== */}
+      <div className="space-y-4 pt-4">
+        {/* Eyebrow & Directory Heading */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+          <div>
+            <div className="text-xs font-bold text-emerald-600 tracking-widest uppercase mb-1 font-sans">
+              NETWORK DIRECTORY
+            </div>
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 font-serif tracking-tight">
+              Explore corridors
+            </h2>
+          </div>
+          <div className="text-xs md:text-sm font-medium text-slate-500 font-sans">
+            {filteredRoutes.length} of {routes.length} corridors shown
+          </div>
         </div>
 
-        {/* Search Input */}
-        <div className="relative min-w-[220px]">
-          <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-muted-text pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search stops, towns, code..."
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-warm-cream border border-soft-sand rounded-xl focus:outline-none focus:border-forest-green focus:bg-white transition-all font-sans"
-          />
-          {searchQuery && (
+        {/* Filter Tabs and Search Bar Row */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 md:p-3 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Operator Filter Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+            {[
+              { id: 'ALL', label: 'All Corridors' },
+              { id: 'KSRTC', label: 'KSRTC' },
+              { id: 'APSRTC', label: 'APSRTC' },
+              { id: 'PRIVATE', label: 'Private' },
+              { id: 'RAILWAYS', label: 'Rail' },
+            ].map((tab) => {
+              const isActive = operatorFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setOperatorFilter(tab.id)}
+                  className={`text-xs md:text-sm font-semibold px-4 py-2 rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search Input Box */}
+          <div className="relative min-w-[240px] md:w-80 shrink-0">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search stop, town or code"
+              className="w-full pl-10 pr-9 py-2 text-xs md:text-sm bg-slate-50/70 border border-slate-200/80 rounded-xl focus:outline-none focus:border-emerald-600 focus:bg-white text-slate-900 placeholder:text-slate-400 transition-all font-sans"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* =========================================================================
+          SECTION 3: ROUTE CORRIDOR CARDS (Screenshots 1 & 2 Reference)
+      ========================================================================== */}
+      {filteredRoutes.length === 0 ? (
+        <div className="bg-white border border-slate-200/80 rounded-3xl p-10 md:p-14 text-center space-y-4 shadow-xs">
+          <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
+            <Bus className="w-6 h-6" />
+          </div>
+          <h3 className="text-lg font-serif font-bold text-slate-900">
+            {routes.length === 0 ? 'No Transport Corridors Available Yet' : 'No Corridors Match Your Search'}
+          </h3>
+          <p className="text-xs md:text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
+            {routes.length === 0
+              ? 'Transport corridor records are currently being published by the local transit administration.'
+              : `No active corridors matched "${searchQuery}" under the selected operator filter.`}
+          </p>
+          {(operatorFilter !== 'ALL' || searchQuery) && (
             <button
               type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-2 text-xs text-muted-text hover:text-dark-text cursor-pointer"
+              onClick={() => {
+                setOperatorFilter('ALL');
+                setSearchQuery('');
+              }}
+              className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
             >
-              <X className="w-3.5 h-3.5" />
+              Reset Filters
             </button>
           )}
-        </div>
-      </div>
-
-      {/* Route List */}
-      {filteredRoutes.length === 0 ? (
-        <div className="bg-white border border-soft-sand rounded-2xl p-10 text-center space-y-3">
-          <Bus className="w-10 h-10 text-forest-green/50 mx-auto" />
-          <h3 className="text-base font-serif font-bold text-dark-text">No Matching Transit Routes</h3>
-          <p className="text-xs text-muted-text max-w-md mx-auto">
-            No active corridors matched &ldquo;{searchQuery}&rdquo; under the selected filter. Try clearing your search query or choosing another operator.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setOperatorFilter('ALL');
-              setSearchQuery('');
-            }}
-            className="px-4 py-2 bg-forest-green text-white text-xs font-semibold rounded-xl hover:bg-forest-green/90 transition-colors"
-          >
-            Reset Filters
-          </button>
         </div>
       ) : (
         <div className="space-y-6">
           {filteredRoutes.map((route) => {
-            const hasStops = Array.isArray(route.stops) && route.stops.length > 0;
-            const hasTimings = Array.isArray(route.timings) && route.timings.length > 0;
             const isTimingsExpanded = expandedRouteTimings[route.id] ?? false;
+            const journeyDuration = calculateJourneyDuration(route);
+            const frequencySummary = getFrequencySummary(route);
 
-            // Sort stops by sequence
-            const sortedStops = hasStops
-              ? [...route.stops!].sort((a, b) => a.sequence - b.sequence)
-              : [];
+            // Prepare stops sequence from backend stops or fallback to via
+            const hasStops = Array.isArray(route.stops) && route.stops.length > 0;
+            const orderedStops: Array<{
+              id: string | number;
+              name: string;
+              kannadaName?: string;
+              isMajorStop: boolean;
+            }> = hasStops
+              ? [...route.stops!]
+                  .sort((a, b) => a.sequence - b.sequence)
+                  .map((s, idx) => ({
+                    id: s.id || s.stopId || idx,
+                    name: cleanStationTitle(s.stopName),
+                    kannadaName: s.kannadaName,
+                    isMajorStop: s.isMajorStop || idx === 0 || idx === (route.stops?.length || 1) - 1,
+                  }))
+              : [
+                  { id: 'src', name: cleanStationTitle(route.source), isMajorStop: true },
+                  ...(route.via || []).map((v, i) => ({
+                    id: `via-${i}`,
+                    name: cleanStationTitle(v),
+                    isMajorStop: false,
+                  })),
+                  { id: 'dest', name: cleanStationTitle(route.destination), isMajorStop: true },
+                ];
+
+            // Clean origin and destination display
+            const originTitle = cleanStationTitle(route.source);
+            const destinationTitle = cleanStationTitle(route.destination);
 
             return (
               <div
                 key={route.id}
-                className="bg-white border border-soft-sand hover:border-forest-green/50 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-200"
+                className="bg-white border border-slate-200/80 rounded-3xl p-6 md:p-8 shadow-xs hover:border-slate-300 transition-all space-y-6"
               >
-                {/* Route Header */}
-                <div className="flex flex-wrap items-center justify-between border-b border-soft-sand pb-3 mb-4 gap-2">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs font-bold bg-forest-green text-white px-2.5 py-0.5 rounded-md shadow-2xs">
-                      {route.routeCode}
-                    </span>
-                    <Badge
-                      variant={
-                        route.operator === 'KSRTC'
-                          ? 'forest'
-                          : route.operator === 'APSRTC'
-                          ? 'terracotta'
-                          : route.operator === 'PRIVATE'
-                          ? 'sand'
-                          : 'sand'
-                      }
-                    >
-                      {route.operator}
-                    </Badge>
-                    {route.status && route.status !== 'ACTIVE' && (
-                      <span className="text-[10px] font-mono font-bold uppercase bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md">
-                        {route.status}
+                {/* 1. Corridor Header with Operator Badge, Route Code, Title, and Right Summary Panel */}
+                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
+                  <div className="space-y-3">
+                    {/* Badge & Route Code */}
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className={`text-[11px] font-bold px-2.5 py-0.5 rounded-md uppercase tracking-wider ${
+                          route.operator?.toUpperCase() === 'KSRTC'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : route.operator?.toUpperCase() === 'APSRTC'
+                            ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                            : route.operator?.toUpperCase() === 'PRIVATE'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                        }`}
+                      >
+                        {route.operator || 'KSRTC'}
                       </span>
+                      <span className="text-xs font-mono font-medium text-slate-400">
+                        {route.routeCode}
+                      </span>
+                    </div>
+
+                    {/* Origin -> Destination Title */}
+                    <div className="flex flex-wrap items-center text-2xl md:text-3xl font-bold text-slate-900 tracking-tight font-sans">
+                      <span>{originTitle}</span>
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-100 text-slate-400 text-sm mx-2.5 select-none font-sans font-bold">
+                        →
+                      </span>
+                      <span>{destinationTitle}</span>
+                    </div>
+                  </div>
+
+                  {/* Right Summary Panel: FREQUENCY & JOURNEY (Screenshots 1 & 2) */}
+                  <div className="bg-slate-50/80 border border-slate-100 rounded-2xl px-5 py-3 flex items-center gap-6 shrink-0 self-start">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                        FREQUENCY
+                      </span>
+                      <span className="text-xs md:text-sm font-bold text-slate-800 whitespace-nowrap">
+                        {frequencySummary}
+                      </span>
+                    </div>
+
+                    {journeyDuration && (
+                      <>
+                        <div className="w-px h-8 bg-slate-200/80" />
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                            JOURNEY
+                          </span>
+                          <span className="text-xs md:text-sm font-bold text-slate-800 whitespace-nowrap">
+                            {journeyDuration}
+                          </span>
+                        </div>
+                      </>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-muted-text">
-                      {route.isTimetableLive ? '🟢 Live GPS Verified' : 'Standard Corridor Frequency'}
-                    </span>
-                  </div>
                 </div>
 
-                {/* Origin -> Destination Banner */}
-                <div className="grid grid-cols-12 gap-4 items-center mb-5 bg-warm-cream/40 p-4 rounded-xl border border-soft-sand/60">
-                  <div className="col-span-12 sm:col-span-5">
-                    <span className="text-[11px] uppercase font-bold text-muted-text block mb-0.5">Origin Station</span>
-                    <div className="text-lg font-serif font-bold text-forest-green">{route.source}</div>
-                  </div>
-                  <div className="col-span-12 sm:col-span-2 text-center text-xl font-bold text-terracotta select-none">
-                    →
-                  </div>
-                  <div className="col-span-12 sm:col-span-5 sm:text-right">
-                    <span className="text-[11px] uppercase font-bold text-muted-text block mb-0.5">Destination Terminal</span>
-                    <div className="text-lg font-serif font-bold text-forest-green">{route.destination}</div>
-                  </div>
-                </div>
+                {/* 2. Route Timeline with Connecting Line, Circular Markers, and HUB labels */}
+                <div className="pt-2 pb-2">
+                  <div className="overflow-x-auto pb-4 pt-3 -mx-2 px-2 scrollbar-none">
+                    <div className="relative flex items-start justify-between min-w-[580px] md:min-w-full px-4">
+                      {/* Connecting Horizontal Line between first and last marker */}
+                      <div className="absolute top-[8px] left-6 right-6 h-0.5 bg-emerald-200 -z-0" />
 
-                {/* SECTION 1: TRAVEL ORDER & STOPS CORRIDOR (The Sequenced Stops) */}
-                <div className="mb-5">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="font-bold text-forest-green uppercase text-[11px] tracking-wider flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-forest-green shrink-0" />
-                      <span>Travel Order & Sequenced Stops</span>
-                      {hasStops && (
-                        <span className="bg-forest-green/10 text-forest-green text-[10px] font-mono px-1.5 py-0.2 rounded-md font-bold">
-                          {sortedStops.length} STOPS
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-[11px] text-muted-text font-mono">
-                      Sequential travel corridor
-                    </span>
-                  </div>
+                      {orderedStops.map((stop, idx) => {
+                        const isHub = stop.isMajorStop;
 
-                  {hasStops ? (
-                    <div className="bg-warm-cream/30 p-4 rounded-xl border border-soft-sand overflow-x-auto">
-                      {/* Responsive horizontal travel order flow */}
-                      <ol className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3 min-w-full">
-                        {sortedStops.map((stop, idx) => {
-                          const isFirst = idx === 0;
-                          const isLast = idx === sortedStops.length - 1;
-
-                          return (
-                            <React.Fragment key={stop.id || stop.stopId || idx}>
-                              <li className="flex-1 min-w-[150px] bg-white border border-soft-sand rounded-xl p-3 shadow-2xs relative">
-                                <div className="flex items-center justify-between gap-1 mb-1">
-                                  <span className="font-mono text-[10px] font-bold bg-soft-sand/70 text-dark-text px-1.5 py-0.2 rounded">
-                                    #{String(stop.sequence).padStart(2, '0')}
-                                  </span>
-                                  {stop.isMajorStop && (
-                                    <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded flex items-center gap-0.5">
-                                      <Star className="w-2.5 h-2.5 fill-amber-600 text-amber-600" />
-                                      <span>Major Hub</span>
-                                    </span>
-                                  )}
-                                  {isFirst && (
-                                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
-                                      Start
-                                    </span>
-                                  )}
-                                  {isLast && (
-                                    <span className="text-[10px] font-bold bg-terracotta/20 text-terracotta px-1.5 py-0.2 rounded">
-                                      End
-                                    </span>
-                                  )}
+                        return (
+                          <div
+                            key={stop.id}
+                            className="relative z-10 flex flex-col items-center text-center px-2 flex-1 min-w-[100px]"
+                          >
+                            {/* Stop Marker on the Line */}
+                            <div className="flex items-center justify-center h-4.5 mb-2.5">
+                              {isHub ? (
+                                <div className="w-4.5 h-4.5 rounded-full border-2 border-emerald-600 bg-white flex items-center justify-center shadow-xs">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
                                 </div>
-
-                                <div className="text-xs font-bold text-dark-text line-clamp-1" title={stop.stopName}>
-                                  {stop.stopName}
-                                </div>
-
-                                {stop.kannadaName && (
-                                  <div className="text-[11px] text-muted-text font-kannada line-clamp-1" title={stop.kannadaName}>
-                                    {stop.kannadaName}
-                                  </div>
-                                )}
-
-                                {stop.arrivalEstimateMinutes !== null && stop.arrivalEstimateMinutes !== undefined && (
-                                  <div className="text-[10px] font-mono text-terracotta mt-1 flex items-center gap-1">
-                                    <Clock className="w-2.5 h-2.5" />
-                                    <span>+{stop.arrivalEstimateMinutes} mins</span>
-                                  </div>
-                                )}
-                              </li>
-
-                              {/* Arrow between sequential stops on desktop */}
-                              {!isLast && (
-                                <div className="hidden md:flex text-muted-text text-sm font-bold select-none px-0.5">
-                                  →
-                                </div>
+                              ) : (
+                                <div className="w-3.5 h-3.5 rounded-full border-2 border-emerald-400 bg-white shadow-2xs" />
                               )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </ol>
-                    </div>
-                  ) : (
-                    /* Fallback to via tags if stops have not been linked yet */
-                    <div className="bg-warm-cream/60 p-3.5 rounded-xl border border-soft-sand text-xs">
-                      <span className="font-bold text-forest-green uppercase text-[11px] block mb-1.5">
-                        Corridor Route Via:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {route.via && route.via.length > 0 ? (
-                          route.via.map((stop, i) => (
+                            </div>
+
+                            {/* Stop Name */}
                             <span
-                              key={i}
-                              className="bg-white border border-soft-sand px-2.5 py-0.5 rounded-md font-mono text-dark-text shadow-2xs"
+                              className="text-xs md:text-sm font-bold text-slate-800 block leading-snug"
+                              title={stop.name}
                             >
-                              {stop}
+                              {stop.name}
                             </span>
-                          ))
-                        ) : (
-                          <span className="text-muted-text text-xs italic">Direct highway route</span>
-                        )}
-                      </div>
+
+                            {/* Kannada Subtitle if available */}
+                            {stop.kannadaName && (
+                              <span className="text-[11px] text-slate-400 font-kannada mt-0.5 block">
+                                {stop.kannadaName}
+                              </span>
+                            )}
+
+                            {/* HUB Indicator */}
+                            {isHub && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-600 mt-1 block">
+                                HUB
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                {/* SECTION 2: TIMINGS & DEPARTURES SCHEDULE */}
-                {hasTimings && (
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-bold text-forest-green uppercase text-[11px] tracking-wider flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-forest-green shrink-0" />
-                        <span>Scheduled Departures & Timetable</span>
-                        <span className="bg-forest-green/10 text-forest-green text-[10px] font-mono px-1.5 py-0.2 rounded-md font-bold">
-                          {route.timings!.length} TRIPS
-                        </span>
+                {/* 3. Expandable Scheduled Departures Section (Screenshots 1 & 2) */}
+                <div className="border-t border-slate-100 pt-5">
+                  <button
+                    type="button"
+                    onClick={() => toggleTimings(route.id)}
+                    className="w-full flex items-center justify-between group cursor-pointer focus:outline-none"
+                    aria-expanded={isTimingsExpanded}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-5 h-5 rounded-full border border-emerald-500/80 flex items-center justify-center text-emerald-600">
+                        <Clock className="w-3 h-3 stroke-[2.5]" />
+                      </div>
+                      <span className="text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
+                        Scheduled departures
                       </span>
-                      {route.timings!.length > 3 && (
-                        <button
-                          type="button"
-                          onClick={() => toggleTimings(route.id)}
-                          className="text-[11px] text-terracotta font-semibold hover:underline cursor-pointer"
-                        >
-                          {isTimingsExpanded ? 'Show Fewer Trips ▲' : `View All ${route.timings!.length} Trips ▼`}
-                        </button>
-                      )}
+                      <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/60">
+                        {route.timings?.length || 0} trips
+                      </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                      {(isTimingsExpanded ? route.timings! : route.timings!.slice(0, 3)).map((timing) => (
-                        <div
-                          key={timing.id}
-                          className="bg-warm-cream/40 border border-soft-sand rounded-xl p-2.5 text-xs flex flex-col justify-between"
-                        >
-                          <div className="flex items-center justify-between gap-1 mb-1">
-                            <span className="font-mono font-bold text-forest-green text-sm">
-                              {timing.departureTime}
-                            </span>
-                            <span className="text-muted-text text-[10px]">→</span>
-                            <span className="font-mono font-bold text-dark-text text-sm">
-                              {timing.arrivalTime}
-                            </span>
-                          </div>
+                    <div className="text-slate-400 group-hover:text-slate-700 transition-colors">
+                      <ChevronDown
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          isTimingsExpanded ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </div>
+                  </button>
 
-                          <div className="flex items-center justify-between gap-1 text-[10px] pt-1.5 border-t border-soft-sand/60">
-                            <span className="font-bold uppercase tracking-wider text-muted-text">
-                              {timing.busType}
-                            </span>
-                            <span className="font-mono text-forest-green bg-white px-1.5 py-0.2 rounded border border-soft-sand/60">
-                              {timing.dayType}
-                            </span>
-                          </div>
+                  {/* Expanded Departures Table */}
+                  {isTimingsExpanded && (
+                    <div className="mt-4 pt-1 animate-fadeIn">
+                      {route.timings && route.timings.length > 0 ? (
+                        <div className="divide-y divide-slate-100 border-t border-slate-100">
+                          {route.timings.map((timing) => (
+                            <div
+                              key={timing.id}
+                              className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/60 px-3 rounded-xl transition-colors"
+                            >
+                              {/* Departure -> Arrival */}
+                              <div className="flex items-baseline gap-2 min-w-[210px]">
+                                <span className="text-lg font-bold text-slate-900 font-sans tracking-tight">
+                                  {timing.departureTime}
+                                </span>
+                                {timing.arrivalTime && (
+                                  <>
+                                    <span className="text-slate-400 font-medium">→</span>
+                                    <span className="text-sm font-medium text-slate-500">
+                                      {timing.arrivalTime}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
 
-                          {timing.remarks && (
-                            <div className="text-[10px] text-muted-text italic mt-1 line-clamp-1">
-                              {timing.remarks}
+                              {/* Service Type Badge & Notes */}
+                              <div className="flex-1 sm:px-4">
+                                <div className="flex flex-wrap items-center gap-2.5">
+                                  <span
+                                    className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                                      timing.busType?.toUpperCase() === 'EXPRESS'
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                        : timing.busType?.toUpperCase() === 'RAJAHAMSA'
+                                        ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                        : 'bg-slate-100 text-slate-700 border border-slate-200'
+                                    }`}
+                                  >
+                                    {timing.busType || 'ORDINARY'}
+                                  </span>
+
+                                  {timing.remarks ? (
+                                    <span className="text-xs text-slate-500 font-sans">
+                                      {timing.remarks}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-slate-400 font-sans">
+                                      All scheduled stops
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Operating Days */}
+                              <div className="text-left sm:text-right shrink-0">
+                                <span className="text-xs font-medium text-slate-500 font-sans">
+                                  {formatOperatingDays(timing.dayType)}
+                                </span>
+                              </div>
                             </div>
-                          )}
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Footer with Frequency & Status Notes */}
-                <div className="flex flex-col sm:flex-row justify-between items-baseline text-xs text-muted-text pt-3 border-t border-soft-sand/70 gap-2 font-sans">
-                  <div>
-                    <strong className="text-forest-green uppercase text-[11px] tracking-wide">Frequency: </strong>
-                    <span className="text-dark-text font-medium">{route.frequencyNote || 'Standard regular service'}</span>
-                  </div>
-                  {route.statusNote && (
-                    <div className="font-mono text-[11px] text-muted-text">
-                      {route.statusNote}
+                      ) : (
+                        <div className="p-4 mt-2 rounded-2xl bg-slate-50 border border-slate-200/60 text-xs text-slate-500 italic text-center">
+                          No scheduled departure records currently published for this corridor.
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

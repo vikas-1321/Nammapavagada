@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PageRoute } from '../../types/navigation';
 import { SectionHeader } from '../common/SectionHeader';
 import { Button } from '../common/Button';
 import { locationService } from '../../services/locationService';
 import { LocationCard } from '../locations/LocationCard';
 import { LocationDetail } from '../../types/location';
+import { LoadingState } from '../common/LoadingState';
+import { ErrorState } from '../common/ErrorState';
+import { Search } from 'lucide-react';
 
 export interface PlacesTeaserProps {
   onRouteChange: (route: PageRoute) => void;
@@ -16,12 +19,28 @@ export const PlacesTeaser: React.FC<PlacesTeaserProps> = ({
   onSelectLocation,
 }) => {
   const [quickQuery, setQuickQuery] = useState('');
+  const [highlights, setHighlights] = useState<LocationDetail[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<Error | null>(null);
 
-  // Get 3 prominent diverse highlights
-  const highlightIds = ['pavagada-fort-apex', 'shakti-sthala-solar-park', 'bodula-maramma-megalithic'];
-  const highlights = highlightIds
-    .map(id => locationService.getLocationById(id))
-    .filter((loc): loc is LocationDetail => !!loc);
+  const loadHighlights = useCallback(async (forceRefresh = false) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await locationService.getLocationsAsync({ limit: 3 }, { forceRefresh });
+      setHighlights(res.items);
+    } catch (err: unknown) {
+      console.warn('[PlacesTeaser] Failed to load featured places:', err);
+      setError(err instanceof Error ? err : new Error(String(err)));
+      setHighlights([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHighlights();
+  }, [loadHighlights]);
 
   const popularChips = [
     { label: 'Fort Citadel', category: 'FORT_HERITAGE' },
@@ -54,7 +73,7 @@ export const PlacesTeaser: React.FC<PlacesTeaserProps> = ({
       <div className="bg-white border border-soft-sand rounded-2xl p-6 mb-10 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="relative flex-1">
-            <span className="absolute left-4 top-3.5 text-forest-green/60 text-base">🔍</span>
+            <Search className="absolute left-4 top-3.5 text-forest-green/60 w-5 h-5 pointer-events-none" />
             <input
               type="text"
               value={quickQuery}
@@ -68,7 +87,7 @@ export const PlacesTeaser: React.FC<PlacesTeaserProps> = ({
             <button
               type="button"
               onClick={() => onRouteChange('locations')}
-              className="absolute right-2 top-2 bg-forest-green text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-forest-green-dark transition-colors"
+              className="absolute right-2 top-2 bg-forest-green text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-forest-green-dark transition-colors cursor-pointer"
             >
               Search
             </button>
@@ -82,7 +101,7 @@ export const PlacesTeaser: React.FC<PlacesTeaserProps> = ({
                 key={idx}
                 type="button"
                 onClick={() => onRouteChange('locations')}
-                className="text-xs font-medium px-3 py-1 rounded-full bg-soft-sand/70 text-forest-green hover:bg-forest-green hover:text-white transition-colors"
+                className="text-xs font-medium px-3 py-1 rounded-full bg-soft-sand/70 text-forest-green hover:bg-forest-green hover:text-white transition-colors cursor-pointer"
               >
                 {chip.label}
               </button>
@@ -92,20 +111,41 @@ export const PlacesTeaser: React.FC<PlacesTeaserProps> = ({
       </div>
 
       {/* Featured Location Cards Grid */}
-      <div className="grid grid-cols-12 gap-6 md:gap-8">
-        {highlights.map((location) => (
-          <div
-            key={location.id}
-            className="col-span-12 md:col-span-6 lg:col-span-4 flex"
-          >
-            <LocationCard
-              location={location}
-              onSelect={onSelectLocation}
-              onViewOnMap={() => onRouteChange('map')}
-            />
-          </div>
-        ))}
-      </div>
+      {isLoading ? (
+        <LoadingState
+          message="Loading featured landmarks from backend..."
+          submessage="Connecting to Pavagada places service"
+          count={3}
+        />
+      ) : error ? (
+        <ErrorState
+          title="Could Not Load Places"
+          message="Failed to retrieve featured places from the server."
+          error={error}
+          onRetry={() => loadHighlights(true)}
+        />
+      ) : highlights.length === 0 ? (
+        <div className="bg-white border border-dashed border-soft-sand rounded-2xl p-8 text-center my-6">
+          <p className="text-sm text-slate-600 font-sans">
+            No places have been added to the directory yet. Records published from the admin dashboard will appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-12 gap-6 md:gap-8">
+          {highlights.map((location) => (
+            <div
+              key={location.id}
+              className="col-span-12 md:col-span-6 lg:col-span-4 flex"
+            >
+              <LocationCard
+                location={location}
+                onSelect={onSelectLocation}
+                onViewOnMap={() => onRouteChange('map')}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Geospatial Map Invitation Banner */}
       <div className="mt-12 bg-forest-green text-warm-cream rounded-2xl p-6 md:p-8 border border-forest-green-dark shadow-md flex flex-col md:flex-row items-center justify-between gap-6">

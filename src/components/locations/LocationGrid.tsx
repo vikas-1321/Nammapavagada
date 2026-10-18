@@ -1,45 +1,70 @@
 import React from 'react';
 import { LocationDetail } from '../../types/location';
 import { LocationCard } from './LocationCard';
+import { LoadingState } from '../common/LoadingState';
+import { ErrorState } from '../common/ErrorState';
+import { EmptyState } from '../common/EmptyState';
 
 export interface LocationGridProps {
   locations: LocationDetail[];
+  isLoading?: boolean;
+  error?: Error | string | null;
+  onRetry?: () => void;
   onSelectLocation: (location: LocationDetail) => void;
   onViewOnMap?: (location: LocationDetail) => void;
   onResetFilters?: () => void;
+  emptyTitle?: string;
+  emptyMessage?: string;
 }
 
 export const LocationGrid: React.FC<LocationGridProps> = ({
   locations,
+  isLoading = false,
+  error = null,
+  onRetry,
   onSelectLocation,
   onViewOnMap,
   onResetFilters,
+  emptyTitle = 'No places have been added to this category yet.',
+  emptyMessage = 'There are currently no published locations in the central database matching your search or category filter.',
 }) => {
-  if (locations.length === 0) {
+  // 1. Loading State
+  if (isLoading) {
     return (
-      <div className="bg-white border border-soft-sand rounded-2xl p-10 md:p-16 text-center my-8 shadow-sm">
-        <div className="w-16 h-16 rounded-full bg-soft-sand/50 text-forest-green flex items-center justify-center text-2xl mx-auto mb-4">
-          🔍
-        </div>
-        <div className="text-xl md:text-2xl font-serif font-bold text-forest-green mb-2">
-          No records match active criteria
-        </div>
-        <p className="text-sm text-muted-text max-w-md mx-auto mb-6 leading-relaxed">
-          Adjust the category filter or search keywords to view registered landmarks, fortifications, or local services.
-        </p>
-        {onResetFilters && (
-          <button
-            type="button"
-            onClick={onResetFilters}
-            className="bg-forest-green hover:bg-forest-green-dark text-white text-xs uppercase tracking-wider font-bold px-6 py-3 rounded-lg shadow-sm transition-colors"
-          >
-            Reset All Filters
-          </button>
-        )}
-      </div>
+      <LoadingState
+        message="Retrieving verified places from Namma Pavagada database..."
+        submessage="Querying active registered locations"
+        count={6}
+      />
     );
   }
 
+  // 2. Error State
+  if (error) {
+    return (
+      <ErrorState
+        title="Could Not Retrieve Locations"
+        message="A network or server error occurred while contacting the places registry."
+        error={error}
+        onRetry={onRetry}
+      />
+    );
+  }
+
+  // 3. Empty State (Zero fake records)
+  if (locations.length === 0) {
+    return (
+      <EmptyState
+        title={emptyTitle}
+        message={emptyMessage}
+        icon="search"
+        actionLabel={onResetFilters ? 'Reset All Filters' : undefined}
+        onAction={onResetFilters}
+      />
+    );
+  }
+
+  // 4. Success State with Backend Records
   return (
     <div className="grid grid-cols-12 gap-6 md:gap-8">
       {locations.map((location) => (

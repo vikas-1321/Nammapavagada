@@ -1,48 +1,57 @@
-import { LocationDetail } from '../types/location';
-import { locationService } from './locationService';
-import { apiClient } from './apiClient';
+/**
+ * Namma Pavagada - Map Service
+ * Geospatial coordination and marker mapping for Leaflet
+ * Communicates exclusively with backend map markers endpoint:
+ *   GET /api/locations/map/markers
+ *
+ * NO HARDCODED OR MOCK FALLBACKS.
+ */
 
-export interface MapMarkerData {
-  id: string;
-  name: string;
-  category: string;
-  coordinates: [number, number];
-  summary: string;
-  elevationMeters?: number;
-  primaryPhotoUrl?: string;
-}
+import { locationService, MapMarkerData } from './locationService';
+
+export type { MapMarkerData };
 
 class MapService {
   public readonly DEFAULT_CENTER: [number, number] = [14.1025, 77.2798]; // Pavagada Fort Hill
   public readonly DEFAULT_ZOOM: number = 13;
 
+  /**
+   * Synchronous marker retrieval based on current backend locations state.
+   */
   public getMarkers(categoryFilter?: string, query?: string): MapMarkerData[] {
-    const locations: LocationDetail[] = locationService.getLocations({
-      category: categoryFilter as any,
-      searchQuery: query
+    const locations = locationService.getLocations({
+      category: categoryFilter !== 'ALL' ? (categoryFilter as any) : undefined,
+      searchQuery: query,
     });
 
-    return locations.map(loc => ({
-      id: loc.id,
-      name: loc.name,
-      category: loc.category,
-      coordinates: [loc.coordinates.latitude, loc.coordinates.longitude],
-      summary: loc.summary,
-      elevationMeters: loc.coordinates.elevationMeters,
-      primaryPhotoUrl: loc.primaryPhotoUrl,
-    }));
+    return locations
+      .filter((loc) => loc.coordinates && loc.coordinates.latitude != null && loc.coordinates.longitude != null)
+      .map((loc) => ({
+        id: loc.id,
+        name: loc.name,
+        shortName: (loc as any).shortName || loc.name,
+        category: loc.category,
+        subcategory: (loc as any).subcategory,
+        coordinates: [loc.coordinates.latitude, loc.coordinates.longitude],
+        summary: loc.summary,
+        area: (loc as any).area || 'Pavagada',
+        address: loc.address,
+        elevationMeters: loc.coordinates.elevationMeters,
+        primaryPhotoUrl: loc.primaryPhotoUrl,
+        status: loc.status,
+      }));
   }
 
-  public async getMarkersAsync(categoryFilter?: string, query?: string): Promise<MapMarkerData[]> {
-    const remoteMarkers = await apiClient.get<MapMarkerData[]>('/locations/map/markers', {
-      category: categoryFilter !== 'ALL' ? categoryFilter : undefined,
-      q: query,
-    });
-
-    if (remoteMarkers && Array.isArray(remoteMarkers) && remoteMarkers.length > 0) {
-      return remoteMarkers;
-    }
-    return this.getMarkers(categoryFilter, query);
+  /**
+   * Async marker retrieval directly querying backend /api/locations/map/markers.
+   * Excludes records without usable coordinates.
+   */
+  public async getMarkersAsync(
+    categoryFilter?: string,
+    query?: string,
+    forceRefresh: boolean = false
+  ): Promise<MapMarkerData[]> {
+    return locationService.getMapMarkersAsync(categoryFilter, query, forceRefresh);
   }
 
   /**

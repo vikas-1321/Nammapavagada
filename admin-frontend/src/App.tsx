@@ -7,9 +7,6 @@ import { OverviewPage } from './pages/OverviewPage';
 import { LocationsPage } from './pages/LocationsPage';
 import { CategoriesPage } from './pages/CategoriesPage';
 import { BusesPage } from './pages/BusesPage';
-import { HospitalsPage } from './pages/HospitalsPage';
-import { EducationPage } from './pages/EducationPage';
-import { TheatresPage } from './pages/TheatresPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { PhotosPage } from './pages/PhotosPage';
 import { DatabasePage } from './pages/DatabasePage';
@@ -47,9 +44,6 @@ const AdminDashboard: React.FC = () => {
           {currentTab === 'locations' && <LocationsPage />}
           {currentTab === 'categories' && <CategoriesPage />}
           {currentTab === 'buses' && <BusesPage />}
-          {currentTab === 'hospitals' && <HospitalsPage />}
-          {currentTab === 'education' && <EducationPage />}
-          {currentTab === 'theatres' && <TheatresPage />}
           {currentTab === 'history' && <HistoryPage />}
           {currentTab === 'photos' && <PhotosPage />}
           {currentTab === 'search' && <DatabasePage onNavigate={setCurrentTab} />}

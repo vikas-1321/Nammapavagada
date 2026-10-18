@@ -15,9 +15,13 @@ import {
   PhotoRequest,
   AuditLogItem,
   DashboardOverview,
+  TagItem,
+  GroupedTags,
+  DataFreshnessStats,
+  DuplicateCandidate,
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3-6-201-177.sslip.io/api' || 'http://localhost:5000/api';
 
 class AdminApiClient {
   private token: string | null = null;
@@ -118,13 +122,49 @@ class AdminApiClient {
     });
   }
 
-  // --- Locations ---
-  public async getLocations(params?: { category?: string; q?: string; status?: string; limit?: number }): Promise<{ items: LocationItem[]; total: number }> {
+  // --- Tags ---
+  public async getTags(params?: { category?: string; q?: string }): Promise<TagItem[]> {
     const qp = new URLSearchParams();
     if (params?.category && params.category !== 'ALL') qp.append('category', params.category);
     if (params?.q) qp.append('q', params.q);
-    if (params?.status) qp.append('status', params.status);
+    return this.request<TagItem[]>(`/tags?${qp.toString()}`);
+  }
+
+  public async getGroupedTags(): Promise<GroupedTags> {
+    return this.request<GroupedTags>('/tags/grouped');
+  }
+
+  public async createTag(data: { name: string; category?: string; description?: string }): Promise<TagItem> {
+    return this.request<TagItem>('/admin/tags', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // --- Locations & CMS Places ---
+  public async getLocations(params?: {
+    category?: string;
+    subcategory?: string;
+    area?: string;
+    tags?: string;
+    status?: string;
+    verification?: string;
+    needsVerification?: boolean;
+    q?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ items: LocationItem[]; total: number }> {
+    const qp = new URLSearchParams();
+    if (params?.category && params.category !== 'ALL') qp.append('category', params.category);
+    if (params?.subcategory && params.subcategory !== 'ALL') qp.append('subcategory', params.subcategory);
+    if (params?.area && params.area !== 'ALL') qp.append('area', params.area);
+    if (params?.tags) qp.append('tags', params.tags);
+    if (params?.status && params.status !== 'ALL') qp.append('status', params.status);
+    if (params?.verification && params.verification !== 'ALL') qp.append('verification', params.verification);
+    if (params?.needsVerification) qp.append('needsVerification', 'true');
+    if (params?.q) qp.append('q', params.q);
     if (params?.limit) qp.append('limit', String(params.limit));
+    if (params?.offset) qp.append('offset', String(params.offset));
     return this.request<{ items: LocationItem[]; total: number }>(`/admin/locations?${qp.toString()}`);
   }
 
@@ -155,6 +195,42 @@ class AdminApiClient {
 
   public async deleteLocation(id: string): Promise<void> {
     return this.request<void>(`/admin/locations/${id}`, { method: 'DELETE' });
+  }
+
+  public async checkDuplicate(params: {
+    name: string;
+    category?: string;
+    area?: string;
+    excludeId?: string;
+  }): Promise<{ hasDuplicates: boolean; duplicates: DuplicateCandidate[] }> {
+    const qp = new URLSearchParams();
+    qp.append('name', params.name);
+    if (params.category) qp.append('category', params.category);
+    if (params.area) qp.append('area', params.area);
+    if (params.excludeId) qp.append('excludeId', params.excludeId);
+    return this.request<{ hasDuplicates: boolean; duplicates: DuplicateCandidate[] }>(
+      `/admin/locations/check-duplicate?${qp.toString()}`
+    );
+  }
+
+  public async getFreshnessStats(): Promise<DataFreshnessStats> {
+    return this.request<DataFreshnessStats>('/admin/locations/freshness');
+  }
+
+  public async verifyLocation(
+    id: string,
+    payload: { status: string; source: string; verifiedBy?: string; notes?: string }
+  ): Promise<LocationItem> {
+    return this.request<LocationItem>(`/admin/locations/${id}/verify`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  public async duplicateLocation(id: string): Promise<LocationItem> {
+    return this.request<LocationItem>(`/admin/locations/${id}/duplicate`, {
+      method: 'POST',
+    });
   }
 
   // --- Buses ---
@@ -346,10 +422,33 @@ class AdminApiClient {
     return this.request<PhotoItem[]>(`/photos/${entityType}/${entityId}`);
   }
 
-  public async uploadPhoto(formData: FormData): Promise<PhotoItem> {
+  public async uploadPhoto(
+    fileOrFormData: File | FormData,
+    meta?: {
+      entityType?: string;
+      entityId?: string;
+      caption?: string;
+      altText?: string;
+      isPrimary?: boolean;
+      photoType?: string;
+    }
+  ): Promise<PhotoItem> {
+    let body: FormData;
+    if (fileOrFormData instanceof FormData) {
+      body = fileOrFormData;
+    } else {
+      body = new FormData();
+      body.append('file', fileOrFormData);
+      if (meta?.entityType) body.append('entityType', meta.entityType);
+      if (meta?.entityId) body.append('entityId', meta.entityId);
+      if (meta?.caption) body.append('caption', meta.caption);
+      if (meta?.altText) body.append('altText', meta.altText);
+      if (meta?.isPrimary !== undefined) body.append('isPrimary', String(meta.isPrimary));
+      if (meta?.photoType) body.append('photoType', meta.photoType);
+    }
     return this.request<PhotoItem>('/admin/photos/upload', {
       method: 'POST',
-      body: formData,
+      body,
     });
   }
 
