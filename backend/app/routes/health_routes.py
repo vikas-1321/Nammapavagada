@@ -8,6 +8,22 @@ from app.middleware.error_handler import api_response, api_error
 health_bp = Blueprint("health", __name__, url_prefix="/api")
 config = get_config()
 
+@health_bp.route("", methods=["GET"])
+@health_bp.route("/", methods=["GET"])
+def api_index():
+    return api_response({
+        "name": "Namma Pavagada REST API",
+        "status": "online",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/api/health",
+            "auth": "/api/auth/login",
+            "locations": "/api/locations",
+            "categories": "/api/categories",
+            "busRoutes": "/api/bus-routes",
+        }
+    })
+
 @health_bp.route("/health", methods=["GET"])
 def health_check():
     db_ok = False

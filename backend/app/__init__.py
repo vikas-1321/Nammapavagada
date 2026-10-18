@@ -27,6 +27,16 @@ def create_app(config_class=None):
     register_error_handlers(app)
     register_blueprints(app)
 
+    # Add root health check / welcome route
+    @app.route("/", methods=["GET"])
+    def server_root():
+        return {
+            "name": "Namma Pavagada API Server",
+            "status": "online",
+            "api": "/api",
+            "health": "/api/health"
+        }
+
     # Add security headers
     @app.after_request
     def set_security_headers(response):
