@@ -62,11 +62,10 @@ class ServiceDirectoryService {
   public async refreshFromApi(forceRefresh: boolean = false): Promise<boolean> {
     this.isLoading = true;
     try {
-      const [busesRes, stopsRes, govRes, hospRes] = await Promise.allSettled([
+      const [busesRes, stopsRes, locsRes] = await Promise.allSettled([
         apiClient.get<BusRoutesApiResponse>('/buses/routes', { limit: 100 }, { forceRefresh }),
         apiClient.get<any[]>('/buses/stops', undefined, { forceRefresh }),
-        apiClient.get<LocationApiResponse>('/locations', { category: 'CIVIC_GOVERNMENT', limit: 50 }, { forceRefresh }),
-        apiClient.get<any[]>('/hospitals', undefined, { forceRefresh }),
+        apiClient.get<LocationApiResponse>('/locations', { limit: 200 }, { forceRefresh }),
       ]);
 
       let updated = false;
@@ -83,24 +82,32 @@ class ServiceDirectoryService {
         updated = true;
       }
 
-      // 2. Civic Government Offices from backend locations
-      if (govRes.status === 'fulfilled' && govRes.value && Array.isArray(govRes.value.items)) {
-        this.civicOffices = govRes.value.items.map((loc: any) => ({
-          id: loc.id,
-          department: loc.subcategory || loc.historicalContext?.patronRuler || 'Town Administration',
-          officeName: loc.name,
-          contactNumber: loc.contact?.phone || loc.contact?.authority,
-          address: loc.address,
-          workingHours: loc.hours?.days ? `${loc.hours.days}: ${loc.hours.open || ''} - ${loc.hours.close || ''}` : '10:00 AM – 05:30 PM (Mon–Sat)',
-          keyServices: Array.isArray(loc.keyAttributes)
-            ? loc.keyAttributes.map((a: any) => `${a.label}: ${a.value}`)
-            : loc.tags || [],
-          verificationStatus: loc.verification?.status === 'VERIFIED' ? 'Verified Official' : 'Under Review',
-        }));
+      const allLocs: any[] = (locsRes.status === 'fulfilled' && locsRes.value && Array.isArray(locsRes.value.items))
+        ? locsRes.value.items
+        : [];
+
+      // 2. Civic Government Offices from active backend locations
+      const govLocs = allLocs.filter((l) => {
+        const cat = (l.category || '').toUpperCase();
+        return cat === 'CIVIC_GOVERNMENT' || cat === 'CIVIC_GOVERNANCE';
+      });
+      this.civicOffices = govLocs.map((loc: any) => ({
+        id: loc.id,
+        department: loc.subcategory || loc.historicalContext?.patronRuler || 'Town Administration',
+        officeName: loc.name,
+        contactNumber: loc.contact?.phone || loc.contact?.authority,
+        address: loc.address,
+        workingHours: loc.hours?.days ? `${loc.hours.days}: ${loc.hours.open || ''} - ${loc.hours.close || ''}` : '10:00 AM – 05:30 PM (Mon–Sat)',
+        keyServices: Array.isArray(loc.keyAttributes)
+          ? loc.keyAttributes.map((a: any) => `${a.label}: ${a.value}`)
+          : loc.tags || [],
+        verificationStatus: loc.verification?.status === 'VERIFIED' ? 'Verified Official' : 'Under Review',
+      }));
+      if (locsRes.status === 'fulfilled') {
         updated = true;
       }
 
-      // 3. Emergency Contacts assembled from authentic hospitals & emergency registry
+      // 3. Emergency Contacts assembled from authentic active hospitals & permanent helplines
       const emergencyList: EmergencyContact[] = [
         {
           id: 'unified-emergency-112',
@@ -118,20 +125,25 @@ class ServiceDirectoryService {
         },
       ];
 
-      if (hospRes.status === 'fulfilled' && Array.isArray(hospRes.value)) {
-        hospRes.value.forEach((h: any) => {
-          if (h.emergencyPhone || h.phone) {
-            emergencyList.push({
-              id: `hosp-emerg-${h.id}`,
-              service: `${h.name} (Emergency Casualty)`,
-              telephone: h.emergencyPhone || h.phone,
-              alternatePhone: h.phone !== h.emergencyPhone ? h.phone : undefined,
-              operationalHours: h.openingHours || '24/7 Casualty & Inpatient Desk',
-              notes: `Address: ${h.address}`,
-            });
-          }
-        });
-      }
+      const hospLocs = allLocs.filter((l) => {
+        const cat = (l.category || '').toUpperCase();
+        return cat === 'HEALTHCARE' || cat === 'HEALTHCARE_MEDICAL' || cat === 'EMERGENCY_CRITICAL_CARE';
+      });
+
+      hospLocs.forEach((h: any) => {
+        const phone = h.contact?.phone || h.contact?.authority;
+        const emergencyPhone = h.contact?.alternatePhone || phone;
+        if (emergencyPhone || phone) {
+          emergencyList.push({
+            id: `hosp-emerg-${h.id}`,
+            service: `${h.name} (Emergency Casualty)`,
+            telephone: emergencyPhone || phone,
+            alternatePhone: phone !== emergencyPhone ? phone : undefined,
+            operationalHours: h.hours?.days ? `${h.hours.days}: ${h.hours.open || ''} - ${h.hours.close || ''}` : (h.hours?.notes || '24/7 Casualty & Inpatient Desk'),
+            notes: `Address: ${h.address}`,
+          });
+        }
+      });
 
       this.emergencyContacts = emergencyList;
 

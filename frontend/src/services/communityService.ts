@@ -69,142 +69,140 @@ class CommunityService {
   public async syncCountsFromBackend(forceRefresh: boolean = false): Promise<void> {
     this.isLoading = true;
     try {
-      const promises = [
-        apiClient.get<any[]>('/hospitals', undefined, { forceRefresh }).catch(() => null),
-        apiClient.get<any[]>('/schools', undefined, { forceRefresh }).catch(() => null),
-        apiClient.get<any[]>('/colleges', undefined, { forceRefresh }).catch(() => null),
-        apiClient.get<any[]>('/theatres', undefined, { forceRefresh }).catch(() => null),
+      const [locationsRes, busesRes] = await Promise.all([
+        apiClient.get<LocationApiResponse>('/locations', { limit: 500 }, { forceRefresh }).catch(() => null),
         apiClient.get<BackendBusResponse>('/buses/routes', undefined, { forceRefresh }).catch(() => null),
-        apiClient.get<LocationApiResponse>('/locations', { category: 'CIVIC_GOVERNMENT', limit: 100 }, { forceRefresh }).catch(() => null),
-        apiClient.get<LocationApiResponse>('/locations', { category: 'PUBLIC_UTILITY', limit: 100 }, { forceRefresh }).catch(() => null),
-      ];
-
-      const [hospitalsRes, schoolsRes, collegesRes, theatresRes, busesRes, govRes, utilRes] =
-        await Promise.all(promises);
+      ]);
 
       const freshPlaces: CommunityPlace[] = [];
+      const allLocs: any[] = (locationsRes && typeof locationsRes === 'object' && 'items' in locationsRes && Array.isArray((locationsRes as LocationApiResponse).items))
+        ? (locationsRes as LocationApiResponse).items
+        : [];
 
-      // 1. Hospitals
-      if (Array.isArray(hospitalsRes)) {
-        this.updateCategoryCount('hospitals', hospitalsRes.length);
-        hospitalsRes.forEach((h: any) => {
-          freshPlaces.push({
-            id: `hosp-${h.id}`,
-            category: 'hospitals',
-            name: h.name,
-            kannadaName: h.kannadaName,
-            type: h.type || 'Government Taluk Hospital',
-            address: h.address || 'Pavagada Town',
-            phone: h.phone,
-            emergencyPhone: h.emergencyPhone,
-            openingHours: h.openingHours || '24/7 Casualty & Inpatient Desk',
-            description: h.description,
-            services: Array.isArray(h.services) ? h.services : [],
-            departments: Array.isArray(h.departments) ? h.departments : [],
-            verificationStatus: 'Verified Official',
-            latitude: h.latitude,
-            longitude: h.longitude,
-            website: h.website,
-          });
+      // 1. Hospitals & Healthcare
+      const hospLocs = allLocs.filter((l) => {
+        const cat = (l.category || '').toUpperCase();
+        return cat === 'HEALTHCARE' || cat === 'HEALTHCARE_MEDICAL' || cat === 'EMERGENCY_CRITICAL_CARE';
+      });
+      this.updateCategoryCount('hospitals', hospLocs.length);
+      hospLocs.forEach((h: any) => {
+        freshPlaces.push({
+          id: `hosp-${h.id}`,
+          category: 'hospitals',
+          name: h.name,
+          kannadaName: h.kannadaName,
+          type: h.subcategory || 'Government Taluk Hospital',
+          address: h.address || 'Pavagada Town',
+          phone: h.contact?.phone || h.contact?.authority,
+          emergencyPhone: h.contact?.alternatePhone || h.contact?.phone,
+          openingHours: h.hours?.days ? `${h.hours.days}: ${h.hours.open || ''} - ${h.hours.close || ''}` : (h.hours?.notes || '24/7 Casualty & Inpatient Desk'),
+          description: h.summary || h.fullDescription,
+          services: Array.isArray(h.keyAttributes) ? h.keyAttributes.map((k: any) => `${k.label}: ${k.value}`) : (h.tags || []),
+          departments: Array.isArray(h.tags) ? h.tags : [],
+          verificationStatus: h.verification?.status === 'VERIFIED' ? 'Verified Official' : 'Registered',
+          latitude: h.coordinates?.latitude,
+          longitude: h.coordinates?.longitude,
+          website: h.contact?.website,
         });
-      } else {
-        this.updateCategoryCount('hospitals', 0);
-      }
+      });
 
-      // 2. Schools
-      if (Array.isArray(schoolsRes)) {
-        this.updateCategoryCount('schools', schoolsRes.length);
-        schoolsRes.forEach((s: any) => {
-          freshPlaces.push({
-            id: `school-${s.id}`,
-            category: 'schools',
-            name: s.name,
-            kannadaName: s.kannadaName,
-            type: s.institutionType || 'Primary & High School',
-            address: s.address,
-            phone: s.phone,
-            openingHours: s.openingHours || '09:30 AM – 04:30 PM',
-            description: s.description,
-            facilities: Array.isArray(s.facilities) ? s.facilities : [],
-            verificationStatus: 'Verified Official',
-            latitude: s.latitude,
-            longitude: s.longitude,
-            website: s.website,
-          });
-        });
-      } else {
-        this.updateCategoryCount('schools', 0);
-      }
+      // 2. Schools & Colleges (from EDUCATION or EDUCATION_TRAINING)
+      const eduLocs = allLocs.filter((l) => {
+        const cat = (l.category || '').toUpperCase();
+        return cat === 'EDUCATION' || cat === 'EDUCATION_TRAINING';
+      });
 
-      // 3. Colleges
-      if (Array.isArray(collegesRes)) {
-        this.updateCategoryCount('colleges', collegesRes.length);
-        collegesRes.forEach((c: any) => {
-          freshPlaces.push({
-            id: `college-${c.id}`,
-            category: 'colleges',
-            name: c.name,
-            kannadaName: c.kannadaName,
-            type: c.institutionType || 'Pre-University / Degree College',
-            address: c.address,
-            phone: c.phone,
-            openingHours: c.openingHours || '09:30 AM – 04:30 PM',
-            description: c.description,
-            courses: Array.isArray(c.courses) ? c.courses : [],
-            facilities: Array.isArray(c.facilities) ? c.facilities : [],
-            verificationStatus: 'Verified Official',
-            latitude: c.latitude,
-            longitude: c.longitude,
-            website: c.website,
-          });
+      const isCollege = (l: any) => {
+        const sub = (l.subcategory || '').toLowerCase();
+        const nm = (l.name || '').toLowerCase();
+        return sub.includes('college') || sub.includes('pu') || sub.includes('degree') || sub.includes('polytechnic') || sub.includes('iti') ||
+               nm.includes('college') || nm.includes('university') || nm.includes('degree');
+      };
+
+      const schoolLocs = eduLocs.filter((l) => !isCollege(l));
+      const collegeLocs = eduLocs.filter((l) => isCollege(l));
+
+      this.updateCategoryCount('schools', schoolLocs.length);
+      schoolLocs.forEach((s: any) => {
+        freshPlaces.push({
+          id: `school-${s.id}`,
+          category: 'schools',
+          name: s.name,
+          kannadaName: s.kannadaName,
+          type: s.subcategory || 'Primary & High School',
+          address: s.address,
+          phone: s.contact?.phone || s.contact?.authority,
+          openingHours: s.hours?.days ? `${s.hours.days}: ${s.hours.open || ''} - ${s.hours.close || ''}` : '09:30 AM – 04:30 PM',
+          description: s.summary || s.fullDescription,
+          facilities: Array.isArray(s.keyAttributes) ? s.keyAttributes.map((k: any) => `${k.label}: ${k.value}`) : (s.tags || []),
+          verificationStatus: s.verification?.status === 'VERIFIED' ? 'Verified Official' : 'Registered',
+          latitude: s.coordinates?.latitude,
+          longitude: s.coordinates?.longitude,
+          website: s.contact?.website,
         });
-      } else {
-        this.updateCategoryCount('colleges', 0);
-      }
+      });
+
+      this.updateCategoryCount('colleges', collegeLocs.length);
+      collegeLocs.forEach((c: any) => {
+        freshPlaces.push({
+          id: `college-${c.id}`,
+          category: 'colleges',
+          name: c.name,
+          kannadaName: c.kannadaName,
+          type: c.subcategory || 'Pre-University / Degree College',
+          address: c.address,
+          phone: c.contact?.phone || c.contact?.authority,
+          openingHours: c.hours?.days ? `${c.hours.days}: ${c.hours.open || ''} - ${c.hours.close || ''}` : '09:30 AM – 04:30 PM',
+          description: c.summary || c.fullDescription,
+          courses: Array.isArray(c.tags) ? c.tags : [],
+          facilities: Array.isArray(c.keyAttributes) ? c.keyAttributes.map((k: any) => `${k.label}: ${k.value}`) : [],
+          verificationStatus: c.verification?.status === 'VERIFIED' ? 'Verified Official' : 'Registered',
+          latitude: c.coordinates?.latitude,
+          longitude: c.coordinates?.longitude,
+          website: c.contact?.website,
+        });
+      });
 
       // 4. Theatres / Entertainment
-      if (Array.isArray(theatresRes)) {
-        this.updateCategoryCount('entertainment', theatresRes.length);
-        theatresRes.forEach((t: any) => {
-          freshPlaces.push({
-            id: `theatre-${t.id}`,
-            category: 'entertainment',
-            name: t.name,
-            kannadaName: t.kannadaName,
-            type: 'Cinema Theatre',
-            address: t.address,
-            phone: t.phone,
-            showTimings: Array.isArray(t.showTimings) ? t.showTimings : [],
-            currentMovie: Array.isArray(t.currentMovies) ? t.currentMovies.join(', ') : '',
-            ticketInfo: t.ticketInfo,
-            verificationStatus: 'Active Service',
-            latitude: t.latitude,
-            longitude: t.longitude,
-            website: t.website,
-          });
+      const theatreLocs = allLocs.filter((l) => {
+        const cat = (l.category || '').toUpperCase();
+        const sub = (l.subcategory || '').toLowerCase();
+        return cat === 'ENTERTAINMENT_HOSPITALITY' || cat === 'EVENTS_CULTURE_VENUES' || cat === 'THEATRE' ||
+               sub.includes('theatre') || sub.includes('cinema');
+      });
+      this.updateCategoryCount('entertainment', theatreLocs.length);
+      theatreLocs.forEach((t: any) => {
+        freshPlaces.push({
+          id: `theatre-${t.id}`,
+          category: 'entertainment',
+          name: t.name,
+          kannadaName: t.kannadaName,
+          type: t.subcategory || 'Cinema Theatre',
+          address: t.address,
+          phone: t.contact?.phone,
+          showTimings: Array.isArray(t.keyAttributes) ? t.keyAttributes.map((k: any) => `${k.label}: ${k.value}`) : [],
+          currentMovie: Array.isArray(t.tags) ? t.tags.join(', ') : '',
+          ticketInfo: t.hours?.notes || '',
+          verificationStatus: t.verification?.status === 'VERIFIED' ? 'Verified Official' : 'Active Service',
+          latitude: t.coordinates?.latitude,
+          longitude: t.coordinates?.longitude,
+          website: t.contact?.website,
         });
-      } else {
-        this.updateCategoryCount('entertainment', 0);
-      }
+      });
 
       // 5. Transport (buses)
-      if (
-        busesRes &&
-        typeof busesRes === 'object' &&
-        'items' in busesRes &&
-        Array.isArray((busesRes as BackendBusResponse).items)
-      ) {
-        this.updateCategoryCount('transport', (busesRes as BackendBusResponse).items.length);
-      } else {
-        this.updateCategoryCount('transport', 0);
-      }
+      const busCount = (busesRes && typeof busesRes === 'object' && 'items' in busesRes && Array.isArray((busesRes as BackendBusResponse).items))
+        ? (busesRes as BackendBusResponse).items.length
+        : 0;
+      this.updateCategoryCount('transport', busCount);
 
       // 6. Civic Administration
-      const govItems: any[] = (govRes && typeof govRes === 'object' && 'items' in govRes && Array.isArray((govRes as LocationApiResponse).items))
-        ? (govRes as LocationApiResponse).items
-        : (Array.isArray(govRes) ? govRes : []);
-      this.updateCategoryCount('government', govItems.length);
-      govItems.forEach((loc: any) => {
+      const govLocs = allLocs.filter((l) => {
+        const cat = (l.category || '').toUpperCase();
+        return cat === 'CIVIC_GOVERNMENT' || cat === 'CIVIC_GOVERNANCE';
+      });
+      this.updateCategoryCount('government', govLocs.length);
+      govLocs.forEach((loc: any) => {
         freshPlaces.push({
           id: `gov-${loc.id}`,
           category: 'government',
@@ -216,7 +214,7 @@ class CommunityService {
           openingHours: loc.hours?.days ? `${loc.hours.days}: ${loc.hours.open || ''} - ${loc.hours.close || ''}` : '10:00 AM – 05:30 PM',
           description: loc.summary,
           services: Array.isArray(loc.keyAttributes) ? loc.keyAttributes.map((k: any) => `${k.label}: ${k.value}`) : loc.tags,
-          verificationStatus: 'Verified Official',
+          verificationStatus: loc.verification?.status === 'VERIFIED' ? 'Verified Official' : 'Registered',
           latitude: loc.coordinates?.latitude,
           longitude: loc.coordinates?.longitude,
           website: loc.contact?.website,
@@ -224,11 +222,12 @@ class CommunityService {
       });
 
       // 7. Banks & Public Utilities
-      const utilItems: any[] = (utilRes && typeof utilRes === 'object' && 'items' in utilRes && Array.isArray((utilRes as LocationApiResponse).items))
-        ? (utilRes as LocationApiResponse).items
-        : (Array.isArray(utilRes) ? utilRes : []);
-      this.updateCategoryCount('banks', utilItems.length);
-      utilItems.forEach((loc: any) => {
+      const utilLocs = allLocs.filter((l) => {
+        const cat = (l.category || '').toUpperCase();
+        return cat === 'PUBLIC_UTILITY' || cat === 'BANKING_FINANCE_LEGAL' || cat === 'DAILY_UTILITIES_TRADES';
+      });
+      this.updateCategoryCount('banks', utilLocs.length);
+      utilLocs.forEach((loc: any) => {
         freshPlaces.push({
           id: `util-${loc.id}`,
           category: 'banks',
@@ -240,19 +239,23 @@ class CommunityService {
           openingHours: loc.hours?.days ? `${loc.hours.days}: ${loc.hours.open || ''} - ${loc.hours.close || ''}` : '10:00 AM – 04:00 PM',
           description: loc.summary,
           services: loc.tags,
-          verificationStatus: 'Registered',
+          verificationStatus: loc.verification?.status === 'VERIFIED' ? 'Verified Official' : 'Registered',
           latitude: loc.coordinates?.latitude,
           longitude: loc.coordinates?.longitude,
           website: loc.contact?.website,
         });
       });
 
-      // 8. Emergency (hospitals casualty numbers + unified helplines)
-      const emergencyPlacesCount = 2 + (Array.isArray(hospitalsRes) ? hospitalsRes.length : 0);
+      // 8. Emergency (helplines + active healthcare casualty numbers)
+      const emergencyPlacesCount = 2 + hospLocs.length;
       this.updateCategoryCount('emergency', emergencyPlacesCount);
 
       // 9. Food & Dining
-      this.updateCategoryCount('food', 0);
+      const foodLocs = allLocs.filter((l) => {
+        const sub = (l.subcategory || '').toLowerCase();
+        return sub.includes('food') || sub.includes('restaurant') || sub.includes('hotel') || sub.includes('eatery');
+      });
+      this.updateCategoryCount('food', foodLocs.length);
 
       this.places = freshPlaces;
       this.isSynced = true;
