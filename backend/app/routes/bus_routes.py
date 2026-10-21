@@ -10,7 +10,7 @@ bus_bp = Blueprint("buses", __name__, url_prefix="/api")
 @bus_bp.route("/buses/routes", methods=["GET"])
 def get_routes():
     search_query = request.args.get("q")
-    limit = int(request.args.get("limit", 100))
+    limit = int(request.args.get("limit", 250))
     offset = int(request.args.get("offset", 0))
 
     routes, total = bus_service.get_routes(status="ACTIVE", search_query=search_query, limit=limit, offset=offset)
@@ -37,7 +37,9 @@ def get_stops():
 def admin_get_routes():
     status = request.args.get("status", "ALL")
     search_query = request.args.get("q")
-    routes, total = bus_service.get_routes(status=status, search_query=search_query)
+    limit = int(request.args.get("limit", 250))
+    offset = int(request.args.get("offset", 0))
+    routes, total = bus_service.get_routes(status=status, search_query=search_query, limit=limit, offset=offset)
     return api_response({"items": routes, "total": total})
 
 @bus_bp.route("/admin/buses/routes", methods=["POST"])
@@ -191,6 +193,39 @@ def admin_add_timing(route_id):
     except ValueError as e:
         return api_error(str(e), "VALIDATION_ERROR", 400)
 
+@bus_bp.route("/admin/buses/timings/<int:timing_id>", methods=["PUT"])
+@require_admin
+def admin_update_timing(timing_id):
+    data = request.get_json() or {}
+    admin_email = request.current_admin.get("email")
+    ip = request.remote_addr
+
+    try:
+        timing = bus_service.update_timing(timing_id, data, admin_email=admin_email, ip=ip)
+        return api_response(timing.to_dict(), message="Timing updated successfully.")
+    except ValueError as e:
+        return api_error(str(e), "NOT_FOUND", 404)
+
+@bus_bp.route("/admin/buses/timings", methods=["GET"])
+@require_admin
+def admin_get_timings():
+    route_id = request.args.get("routeId")
+    classification = request.args.get("classification")
+    verification_status = request.args.get("verificationStatus")
+    search_query = request.args.get("q")
+    limit = int(request.args.get("limit", 300))
+    offset = int(request.args.get("offset", 0))
+
+    items, total = bus_service.get_timings(
+        route_id=route_id,
+        route_classification=classification,
+        verification_status=verification_status,
+        search_query=search_query,
+        limit=limit,
+        offset=offset
+    )
+    return api_response({"items": items, "total": total})
+
 @bus_bp.route("/admin/buses/timings/<int:timing_id>", methods=["DELETE"])
 @require_admin
 def admin_delete_timing(timing_id):
@@ -202,3 +237,4 @@ def admin_delete_timing(timing_id):
         return api_response(None, message="Timing deleted successfully.")
     except ValueError as e:
         return api_error(str(e), "NOT_FOUND", 404)
+

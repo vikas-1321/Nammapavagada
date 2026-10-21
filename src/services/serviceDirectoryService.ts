@@ -63,7 +63,7 @@ class ServiceDirectoryService {
     this.isLoading = true;
     try {
       const [busesRes, stopsRes, locsRes] = await Promise.allSettled([
-        apiClient.get<BusRoutesApiResponse>('/buses/routes', { limit: 100 }, { forceRefresh }),
+        apiClient.get<BusRoutesApiResponse>('/buses/routes', { limit: 250 }, { forceRefresh }),
         apiClient.get<any[]>('/buses/stops', undefined, { forceRefresh }),
         apiClient.get<LocationApiResponse>('/locations', { limit: 200 }, { forceRefresh }),
       ]);

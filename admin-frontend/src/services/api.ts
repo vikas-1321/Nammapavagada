@@ -318,6 +318,13 @@ class AdminApiClient {
     });
   }
 
+  public async updateBusTiming(timingId: number, data: Partial<BusTiming>): Promise<BusTiming> {
+    return this.request<BusTiming>(`/admin/buses/timings/${timingId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
   public async deleteBusTiming(timingId: number): Promise<void> {
     return this.request<void>(`/admin/buses/timings/${timingId}`, { method: 'DELETE' });
   }

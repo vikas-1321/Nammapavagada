@@ -204,9 +204,18 @@ export interface BusTiming {
   stopName?: string;
   departureTime: string;
   arrivalTime?: string;
-  dayType: 'DAILY' | 'MON_SAT' | 'MON_FRI' | 'SUNDAY' | 'HOLIDAY';
+  dayType: 'DAILY' | 'MON_SAT' | 'MON_FRI' | 'SUNDAY' | 'HOLIDAY' | string;
   busType: string;
   remarks?: string;
+  serialNumber?: number;
+  sourceOrigin?: string;
+  sourceDestination?: string;
+  serviceClass?: string;
+  viaPlace?: string;
+  sourceDoc?: string;
+  sourcePage?: number;
+  routeClassification?: string;
+  verificationStatus?: string;
   status: string;
 }
 
@@ -220,6 +229,7 @@ export interface BusRoute {
   frequencyNote?: string;
   statusNote?: string;
   isTimetableLive: boolean;
+  routeClassification?: string;
   status: PlaceStatus;
   stops?: RouteStop[];
   timings?: BusTiming[];

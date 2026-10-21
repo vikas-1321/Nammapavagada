@@ -22,12 +22,24 @@ export interface TransitRouteStop {
 export interface TransitTiming {
   id: number;
   routeId: string;
+  stopId?: string | null;
+  stopName?: string | null;
   departureTime: string;
-  arrivalTime: string;
-  busType: string;
-  dayType: string;
+  arrivalTime?: string | null;
+  busType?: string;
+  dayType?: string;
   remarks?: string;
+  serialNumber?: number | null;
+  sourceOrigin?: string;
+  sourceDestination?: string;
+  serviceClass?: 'Express' | 'Non-Stop' | 'Ordinary' | string;
+  viaPlace?: string;
+  sourceDoc?: string;
+  sourcePage?: number | null;
+  routeClassification?: 'DEPARTING' | 'PASSING_THROUGH' | string;
+  verificationStatus?: 'OFFICIAL_TIMETABLE' | 'OFFICIAL_UNVERIFIED_PASSING' | string;
   status?: string;
+  createdAt?: string;
 }
 
 export interface TransitScheduleItem {
@@ -40,6 +52,7 @@ export interface TransitScheduleItem {
   frequencyNote: string;
   isTimetableLive: boolean;
   statusNote: string;
+  routeClassification?: 'DEPARTING' | 'PASSING_THROUGH' | string;
   status?: string;
   stops?: TransitRouteStop[];
   timings?: TransitTiming[];

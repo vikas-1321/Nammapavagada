@@ -305,11 +305,42 @@ class BusService:
         return route.to_dict(include_details=True)
 
     # --- Bus Timings ---
+    def get_timings(self, route_id: str = None, route_classification: str = None, verification_status: str = None, search_query: str = None, limit: int = 300, offset: int = 0):
+        query = BusTiming.query
+        if route_id:
+            query = query.filter_by(route_id=route_id)
+        if route_classification and route_classification != "ALL":
+            query = query.filter_by(route_classification=route_classification)
+        if verification_status and verification_status != "ALL":
+            query = query.filter_by(verification_status=verification_status)
+        if search_query and search_query.strip():
+            q = f"%{search_query.strip()}%"
+            query = query.filter(
+                (BusTiming.source_origin.ilike(q))
+                | (BusTiming.source_destination.ilike(q))
+                | (BusTiming.via_place.ilike(q))
+                | (BusTiming.service_class.ilike(q))
+                | (BusTiming.departure_time.ilike(q))
+            )
+        total = query.count()
+        timings = query.order_by(
+            BusTiming.serial_number.asc().nullslast(),
+            BusTiming.departure_time.asc()
+        ).offset(offset).limit(limit).all()
+        return [t.to_dict() for t in timings], total
+
     def add_timing(self, route_id: str, data: dict, admin_email: str, ip: str = "") -> BusTiming:
         route = self.get_route_by_id(route_id)
         dep_time = data.get("departureTime") or data.get("departure_time")
         if not dep_time:
             raise ValueError("Departure time is required.")
+
+        s_class = data.get("serviceClass") or data.get("service_class")
+        b_type = data.get("busType") or data.get("bus_type")
+        if not b_type and s_class:
+            b_type = s_class.upper()
+        elif not b_type:
+            b_type = "ORDINARY"
 
         timing = BusTiming(
             route_id=route.id,
@@ -317,7 +348,16 @@ class BusService:
             departure_time=dep_time,
             arrival_time=data.get("arrivalTime") or data.get("arrival_time"),
             day_type=data.get("dayType") or data.get("day_type", "DAILY"),
-            bus_type=data.get("busType") or data.get("bus_type", "ORDINARY"),
+            bus_type=b_type,
+            serial_number=data.get("serialNumber") or data.get("serial_number"),
+            source_origin=data.get("sourceOrigin") or data.get("source_origin") or route.source,
+            source_destination=data.get("sourceDestination") or data.get("source_destination") or route.destination,
+            service_class=s_class or "Ordinary",
+            via_place=data.get("viaPlace") or data.get("via_place"),
+            source_doc=data.get("sourceDoc") or data.get("source_doc", "Pavagada.pdf"),
+            source_page=data.get("sourcePage") or data.get("source_page"),
+            route_classification=data.get("routeClassification") or data.get("route_classification", "DEPARTING"),
+            verification_status=data.get("verificationStatus") or data.get("verification_status", "OFFICIAL_TIMETABLE"),
             remarks=data.get("remarks"),
             status=data.get("status", "ACTIVE"),
         )
@@ -329,6 +369,52 @@ class BusService:
             action="CREATE",
             entity_type="BusTiming",
             entity_id=str(timing.id),
+            new_values=timing.to_dict(),
+            ip_address=ip,
+        )
+        return timing
+
+    def update_timing(self, timing_id: int, data: dict, admin_email: str, ip: str = "") -> BusTiming:
+        timing = BusTiming.query.get(timing_id)
+        if not timing:
+            raise ValueError(f"Timing '{timing_id}' not found.")
+        old_val = timing.to_dict()
+
+        if "departureTime" in data or "departure_time" in data:
+            timing.departure_time = data.get("departureTime", data.get("departure_time"))
+        if "arrivalTime" in data or "arrival_time" in data:
+            timing.arrival_time = data.get("arrivalTime", data.get("arrival_time"))
+        if "dayType" in data or "day_type" in data:
+            timing.day_type = data.get("dayType", data.get("day_type"))
+        if "busType" in data or "bus_type" in data:
+            timing.bus_type = data.get("busType", data.get("bus_type"))
+        if "serialNumber" in data or "serial_number" in data:
+            timing.serial_number = data.get("serialNumber", data.get("serial_number"))
+        if "sourceOrigin" in data or "source_origin" in data:
+            timing.source_origin = data.get("sourceOrigin", data.get("source_origin"))
+        if "sourceDestination" in data or "source_destination" in data:
+            timing.source_destination = data.get("sourceDestination", data.get("source_destination"))
+        if "serviceClass" in data or "service_class" in data:
+            timing.service_class = data.get("serviceClass", data.get("service_class"))
+        if "viaPlace" in data or "via_place" in data:
+            timing.via_place = data.get("viaPlace", data.get("via_place"))
+        if "routeClassification" in data or "route_classification" in data:
+            timing.route_classification = data.get("routeClassification", data.get("route_classification"))
+        if "verificationStatus" in data or "verification_status" in data:
+            timing.verification_status = data.get("verificationStatus", data.get("verification_status"))
+        if "remarks" in data:
+            timing.remarks = data["remarks"]
+        if "status" in data:
+            timing.status = data["status"]
+
+        db.session.commit()
+
+        audit_service.log_action(
+            admin_email=admin_email,
+            action="UPDATE",
+            entity_type="BusTiming",
+            entity_id=str(timing.id),
+            old_values=old_val,
             new_values=timing.to_dict(),
             ip_address=ip,
         )

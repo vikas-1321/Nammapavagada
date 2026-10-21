@@ -34,6 +34,7 @@ export const BusesPage: React.FC = () => {
   const [isStopModalOpen, setIsStopModalOpen] = useState(false);
   const [isEditingStopModalOpen, setIsEditingStopModalOpen] = useState(false);
   const [isTimingModalOpen, setIsTimingModalOpen] = useState(false);
+  const [isEditTimingModalOpen, setIsEditTimingModalOpen] = useState(false);
   const [isAddStopToRouteOpen, setIsAddStopToRouteOpen] = useState(false);
   const [isEditRouteStopModalOpen, setIsEditRouteStopModalOpen] = useState(false);
 
@@ -41,6 +42,7 @@ export const BusesPage: React.FC = () => {
   const [editingRoute, setEditingRoute] = useState<BusRoute | null>(null);
   const [editingStop, setEditingStop] = useState<BusStop | null>(null);
   const [editingRouteStop, setEditingRouteStop] = useState<RouteStop | null>(null);
+  const [editingTiming, setEditingTiming] = useState<BusTiming | null>(null);
 
   // Form states
   const [routeForm, setRouteForm] = useState({
@@ -66,10 +68,30 @@ export const BusesPage: React.FC = () => {
 
   const [timingForm, setTimingForm] = useState({
     departureTime: '07:00 AM',
-    arrivalTime: '09:30 AM',
+    arrivalTime: '',
     dayType: 'DAILY' as 'DAILY' | 'MON_SAT' | 'MON_FRI' | 'SUNDAY' | 'HOLIDAY',
     busType: 'EXPRESS',
-    remarks: 'Regular scheduled service',
+    serviceClass: 'Express',
+    sourceOrigin: '',
+    sourceDestination: '',
+    viaPlace: '',
+    routeClassification: 'DEPARTING',
+    verificationStatus: 'OFFICIAL_TIMETABLE',
+    remarks: 'Official timetable service',
+  });
+
+  const [editTimingForm, setEditTimingForm] = useState({
+    departureTime: '',
+    arrivalTime: '',
+    dayType: 'DAILY',
+    busType: 'ORDINARY',
+    serviceClass: 'Ordinary',
+    sourceOrigin: '',
+    sourceDestination: '',
+    viaPlace: '',
+    routeClassification: 'DEPARTING',
+    verificationStatus: 'OFFICIAL_TIMETABLE',
+    remarks: '',
   });
 
   const [linkStopForm, setLinkStopForm] = useState({
@@ -390,6 +412,37 @@ export const BusesPage: React.FC = () => {
       await fetchData();
     } catch (err: any) {
       alert(err.message || 'Failed to add timing.');
+    }
+  };
+
+  const handleOpenEditTiming = (t: BusTiming) => {
+    setEditingTiming(t);
+    setEditTimingForm({
+      departureTime: t.departureTime || '',
+      arrivalTime: t.arrivalTime || '',
+      dayType: t.dayType || 'DAILY',
+      busType: t.busType || 'ORDINARY',
+      serviceClass: t.serviceClass || 'Ordinary',
+      sourceOrigin: t.sourceOrigin || selectedRoute?.source || '',
+      sourceDestination: t.sourceDestination || selectedRoute?.destination || '',
+      viaPlace: t.viaPlace || '',
+      routeClassification: t.routeClassification || 'DEPARTING',
+      verificationStatus: t.verificationStatus || 'OFFICIAL_TIMETABLE',
+      remarks: t.remarks || '',
+    });
+    setIsEditTimingModalOpen(true);
+  };
+
+  const handleUpdateTiming = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTiming) return;
+    try {
+      await adminApi.updateBusTiming(editingTiming.id, editTimingForm);
+      setIsEditTimingModalOpen(false);
+      setEditingTiming(null);
+      await fetchData();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update timing.');
     }
   };
 
@@ -819,50 +872,82 @@ export const BusesPage: React.FC = () => {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-slate-800 text-slate-400 text-[10px] uppercase font-bold">
+                        <th className="py-2.5 px-3">SL #</th>
                         <th className="py-2.5 px-3">Departure</th>
-                        <th className="py-2.5 px-3">Est. Arrival</th>
-                        <th className="py-2.5 px-3">Day Type</th>
-                        <th className="py-2.5 px-3">Bus Type</th>
-                        <th className="py-2.5 px-3">Remarks</th>
-                        <th className="py-2.5 px-3 text-right">Delete</th>
+                        <th className="py-2.5 px-3">Service Class</th>
+                        <th className="py-2.5 px-3">Via Place</th>
+                        <th className="py-2.5 px-3">Classification</th>
+                        <th className="py-2.5 px-3">Origin / Destination</th>
+                        <th className="py-2.5 px-3">Source Doc</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60">
                       {selectedRoute.timings && selectedRoute.timings.length > 0 ? (
-                        selectedRoute.timings.map((t) => (
-                          <tr key={t.id} className="hover:bg-slate-800/40">
-                            <td className="py-2.5 px-3 font-mono font-bold text-white">
-                              {t.departureTime}
-                            </td>
-                            <td className="py-2.5 px-3 font-mono text-slate-300">
-                              {t.arrivalTime || '—'}
-                            </td>
-                            <td className="py-2.5 px-3">
-                              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300">
-                                {t.dayType}
-                              </span>
-                            </td>
-                            <td className="py-2.5 px-3 text-emerald-400 font-medium">
-                              {t.busType}
-                            </td>
-                            <td className="py-2.5 px-3 text-slate-400 text-[11px]">
-                              {t.remarks || '—'}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteTiming(t.id)}
-                                className="p-1 rounded text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
-                                title="Delete this timing"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
+                        selectedRoute.timings.map((t) => {
+                          const isPassing =
+                            t.routeClassification === 'PASSING_THROUGH' ||
+                            (t.sourceOrigin && t.sourceOrigin.toLowerCase() !== 'pavagada');
+
+                          return (
+                            <tr key={t.id} className="hover:bg-slate-800/40">
+                              <td className="py-2.5 px-3 font-mono text-slate-400">
+                                {t.serialNumber ? `#${t.serialNumber}` : '—'}
+                              </td>
+                              <td className="py-2.5 px-3 font-mono font-bold text-white">
+                                {t.departureTime}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-emerald-400 border border-slate-700">
+                                  {t.serviceClass || t.busType || 'Ordinary'}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-300">
+                                {t.viaPlace || '—'}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                {isPassing ? (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-950/60 text-amber-300 border border-amber-800/60">
+                                    Passing Through
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
+                                    Departing
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-400 text-[11px]">
+                                {t.sourceOrigin || selectedRoute.source} → {t.sourceDestination || selectedRoute.destination}
+                              </td>
+                              <td className="py-2.5 px-3 text-slate-500 font-mono text-[10px]">
+                                {t.sourceDoc || 'Pavagada.pdf'} {t.sourcePage ? `(p.${t.sourcePage})` : ''}
+                              </td>
+                              <td className="py-2.5 px-3 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditTiming(t)}
+                                    className="p-1 rounded text-slate-400 hover:text-blue-400 transition-colors cursor-pointer"
+                                    title="Edit timing"
+                                  >
+                                    <Pencil size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteTiming(t.id)}
+                                    className="p-1 rounded text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
+                                    title="Delete this timing"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
                       ) : (
                         <tr>
-                          <td colSpan={6} className="py-6 text-center text-slate-500">
+                          <td colSpan={8} className="py-6 text-center text-slate-500">
                             No timings scheduled for this route yet. Click "Add Timing Run" above.
                           </td>
                         </tr>
@@ -1544,6 +1629,172 @@ export const BusesPage: React.FC = () => {
                   className="px-5 py-2 bg-forest text-white rounded-xl text-xs font-bold cursor-pointer"
                 >
                   Add Timing
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================= */}
+      {/* MODAL: EDIT BUS TIMING RUN                                    */}
+      {/* ============================================================= */}
+      {isEditTimingModalOpen && editingTiming && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl">
+            <h3 className="text-base font-bold text-white mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock size={16} className="text-blue-400" />
+                <span>Edit Timetable Entry</span>
+              </div>
+              {editingTiming.serialNumber && (
+                <span className="text-xs font-mono font-bold bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700">
+                  SL #{editingTiming.serialNumber}
+                </span>
+              )}
+            </h3>
+            <form onSubmit={handleUpdateTiming} className="space-y-3.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Departure Time *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editTimingForm.departureTime}
+                    onChange={(e) => setEditTimingForm({ ...editTimingForm, departureTime: e.target.value })}
+                    placeholder="06:30 AM"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Service Class *
+                  </label>
+                  <select
+                    value={editTimingForm.serviceClass}
+                    onChange={(e) => setEditTimingForm({ ...editTimingForm, serviceClass: e.target.value, busType: e.target.value.toUpperCase() })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  >
+                    <option value="Ordinary">Ordinary</option>
+                    <option value="Express">Express</option>
+                    <option value="Non-Stop">Non-Stop</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Via Location
+                  </label>
+                  <input
+                    type="text"
+                    value={editTimingForm.viaPlace}
+                    onChange={(e) => setEditTimingForm({ ...editTimingForm, viaPlace: e.target.value })}
+                    placeholder="e.g. Madhugiri"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Day Type
+                  </label>
+                  <select
+                    value={editTimingForm.dayType}
+                    onChange={(e) => setEditTimingForm({ ...editTimingForm, dayType: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  >
+                    <option value="DAILY">Daily</option>
+                    <option value="MON_SAT">Monday–Saturday</option>
+                    <option value="MON_FRI">Monday–Friday</option>
+                    <option value="SUNDAY">Sunday Only</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Origin (Recorded)
+                  </label>
+                  <input
+                    type="text"
+                    value={editTimingForm.sourceOrigin}
+                    onChange={(e) => setEditTimingForm({ ...editTimingForm, sourceOrigin: e.target.value })}
+                    placeholder="Pavagada"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Destination (Recorded)
+                  </label>
+                  <input
+                    type="text"
+                    value={editTimingForm.sourceDestination}
+                    onChange={(e) => setEditTimingForm({ ...editTimingForm, sourceDestination: e.target.value })}
+                    placeholder="Bangalore"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Route Classification
+                  </label>
+                  <select
+                    value={editTimingForm.routeClassification}
+                    onChange={(e) => setEditTimingForm({ ...editTimingForm, routeClassification: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  >
+                    <option value="DEPARTING">Departing Pavagada</option>
+                    <option value="PASSING_THROUGH">Passing Through Pavagada</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Verification Status
+                  </label>
+                  <select
+                    value={editTimingForm.verificationStatus}
+                    onChange={(e) => setEditTimingForm({ ...editTimingForm, verificationStatus: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                  >
+                    <option value="OFFICIAL_TIMETABLE">Official Timetable (Confirmed)</option>
+                    <option value="OFFICIAL_UNVERIFIED_PASSING">Official (Passing Through Unverified)</option>
+                    <option value="VERIFIED_LOCAL">Verified with Station Master</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Remarks / Audit Note</label>
+                <input
+                  type="text"
+                  value={editTimingForm.remarks}
+                  onChange={(e) => setEditTimingForm({ ...editTimingForm, remarks: e.target.value })}
+                  placeholder="Official schedule from Pavagada.pdf"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsEditTimingModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Save Timetable Changes
                 </button>
               </div>
             </form>

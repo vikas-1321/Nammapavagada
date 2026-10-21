@@ -13,6 +13,7 @@ class BusRoute(db.Model, TimestampMixin):
     frequency_note = db.Column(db.Text, nullable=True)
     status_note = db.Column(db.Text, nullable=True)
     is_timetable_live = db.Column(db.Boolean, default=False)
+    route_classification = db.Column(db.String(50), default="DEPARTING", nullable=True) # DEPARTING, PASSING_THROUGH
 
     # Relationships
     route_stops = db.relationship("RouteStop", back_populates="route", cascade="all, delete-orphan", order_by="RouteStop.stop_sequence")
@@ -40,11 +41,16 @@ class BusRoute(db.Model, TimestampMixin):
             "frequencyNote": self.frequency_note or "",
             "statusNote": self.status_note or "",
             "isTimetableLive": self.is_timetable_live,
+            "routeClassification": self.route_classification or "DEPARTING",
             "status": self.status,
             "createdAt": self.created_at.isoformat() if self.created_at else None,
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
         }
         if include_details:
             data["stops"] = [rs.to_dict() for rs in self.route_stops]
-            data["timings"] = [bt.to_dict() for bt in self.timings]
+            sorted_timings = sorted(
+                self.timings,
+                key=lambda t: (t.serial_number if t.serial_number is not None else 999999, t.departure_time or "")
+            )
+            data["timings"] = [bt.to_dict() for bt in sorted_timings]
         return data
