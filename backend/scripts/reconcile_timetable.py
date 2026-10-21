@@ -55,23 +55,23 @@ def reconcile():
                 continue
 
             # Check Origin
-            if t.source_origin != row["from"].strip():
+            if t.source_origin != str(row["from"]).strip():
                 mismatches.append(f"SL #{sl}: Origin mismatch (DB: '{t.source_origin}', Source: '{row['from']}')")
 
             # Check Destination
-            if t.source_destination != row["to"].strip():
+            if t.source_destination != str(row["to"]).strip():
                 mismatches.append(f"SL #{sl}: Destination mismatch (DB: '{t.source_destination}', Source: '{row['to']}')")
 
             # Check Service Class
-            if t.service_class != row["service_class"].strip():
+            if t.service_class != str(row["service_class"]).strip():
                 mismatches.append(f"SL #{sl}: Class mismatch (DB: '{t.service_class}', Source: '{row['service_class']}')")
 
             # Check Via Place
-            if t.via_place != row["via"].strip():
+            if t.via_place != str(row["via"]).strip():
                 mismatches.append(f"SL #{sl}: Via mismatch (DB: '{t.via_place}', Source: '{row['via']}')")
 
             # Check Departure Time
-            if t.departure_time != row["departure_time"].strip():
+            if t.departure_time != str(row["departure_time"]).strip():
                 mismatches.append(f"SL #{sl}: Departure time mismatch (DB: '{t.departure_time}', Source: '{row['departure_time']}')")
 
             # Check Source Page
@@ -79,7 +79,7 @@ def reconcile():
                 mismatches.append(f"SL #{sl}: Source page mismatch (DB: {t.source_page}, Source: {row['page']})")
 
             # Check Pavagada Inclusion Rule
-            is_departing = (row["from"].strip().lower() == "pavagada")
+            is_departing = (str(row["from"]).strip().lower() == "pavagada")
             if is_departing:
                 departing_count += 1
                 if t.route_classification != "DEPARTING":

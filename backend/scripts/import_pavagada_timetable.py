@@ -235,6 +235,36 @@ def import_timetable():
                 db.session.add(timing)
                 stats["timings_created"] += 1
 
+        db.session.flush()
+
+        # 3. Clean up obsolete Bangalore routes with 0 timings & update legacy records to Bengaluru
+        legacy_bangalore_routes = BusRoute.query.filter(
+            (BusRoute.destination == "Bangalore") | (BusRoute.source == "Bangalore")
+        ).all()
+        for lr in legacy_bangalore_routes:
+            if lr.destination == "Bangalore":
+                lr.destination = "Bengaluru"
+            if lr.source == "Bangalore":
+                lr.source = "Bengaluru"
+
+        legacy_bangalore_timings = BusTiming.query.filter(
+            (BusTiming.source_destination == "Bangalore") | (BusTiming.source_origin == "Bangalore")
+        ).all()
+        for lt in legacy_bangalore_timings:
+            if lt.source_destination == "Bangalore":
+                lt.source_destination = "Bengaluru"
+            if lt.source_origin == "Bangalore":
+                lt.source_origin = "Bengaluru"
+
+        obsolete_routes = BusRoute.query.filter(
+            (BusRoute.id.like("%bangalore%"))
+        ).all()
+        for r in obsolete_routes:
+            timing_count = BusTiming.query.filter_by(route_id=r.id).count()
+            if timing_count == 0:
+                print(f"[Cleanup] Removing obsolete route without timings: {r.id}")
+                db.session.delete(r)
+
         db.session.commit()
 
         print("\n================ IMPORT SUMMARY ================")

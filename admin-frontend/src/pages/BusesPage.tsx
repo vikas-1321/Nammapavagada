@@ -1735,7 +1735,7 @@ export const BusesPage: React.FC = () => {
                     type="text"
                     value={editTimingForm.sourceDestination}
                     onChange={(e) => setEditTimingForm({ ...editTimingForm, sourceDestination: e.target.value })}
-                    placeholder="Bangalore"
+                    placeholder="Bengaluru"
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white"
                   />
                 </div>
