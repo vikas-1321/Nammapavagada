@@ -28,6 +28,9 @@ class BusTiming(db.Model, TimestampMixin):
     route = db.relationship("BusRoute", back_populates="timings")
     stop = db.relationship("BusStop")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def to_dict(self):
         return {
             "id": self.id,

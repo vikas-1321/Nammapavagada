@@ -123,7 +123,7 @@ def import_timetable():
         # 1. Group records by unique (From, To, Via) to manage routes cleanly
         corridors = {}
         for row in TIMETABLE_DATA:
-            key = (row["from"].strip(), row["to"].strip(), row["via"].strip())
+            key = (str(row["from"]).strip(), str(row["to"]).strip(), str(row["via"]).strip())
             corridors.setdefault(key, []).append(row)
 
         print(f"[Import] Found {len(corridors)} distinct transit corridors across {len(TIMETABLE_DATA)} rows.")
@@ -174,11 +174,11 @@ def import_timetable():
         # 2. Upsert Timings for all 249 rows
         for row in TIMETABLE_DATA:
             sl_no = row["sl_no"]
-            orig = row["from"].strip()
-            dest = row["to"].strip()
-            s_class = row["service_class"].strip()
-            via = row["via"].strip()
-            dep_time = row["departure_time"].strip()
+            orig = str(row["from"]).strip()
+            dest = str(row["to"]).strip()
+            s_class = str(row["service_class"]).strip()
+            via = str(row["via"]).strip()
+            dep_time = str(row["departure_time"]).strip()
             page = row["page"]
 
             is_departing = (orig.lower() == "pavagada")

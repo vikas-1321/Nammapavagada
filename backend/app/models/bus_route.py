@@ -19,6 +19,9 @@ class BusRoute(db.Model, TimestampMixin):
     route_stops = db.relationship("RouteStop", back_populates="route", cascade="all, delete-orphan", order_by="RouteStop.stop_sequence")
     timings = db.relationship("BusTiming", back_populates="route", cascade="all, delete-orphan")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     @property
     def via(self):
         try:

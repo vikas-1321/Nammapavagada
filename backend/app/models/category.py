@@ -15,6 +15,9 @@ class Category(db.Model, TimestampMixin):
     # Relationships
     locations = db.relationship("Location", back_populates="category", lazy="select")
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def to_dict(self):
         return {
             "id": self.id,
