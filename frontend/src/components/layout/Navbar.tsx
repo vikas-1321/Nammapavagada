@@ -57,50 +57,50 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onRouteChange }) =
         {/* Brand Identity */}
         <button
           onClick={() => handleNavClick('home')}
-          className="text-left group focus-visible:ring-2 focus-visible:ring-terracotta rounded-xl p-1 -ml-1 transition-transform flex items-center gap-3"
+          className="text-left group focus-visible:ring-2 focus-visible:ring-terracotta rounded-xl p-1 -ml-1 transition-transform flex items-center gap-2.5 sm:gap-3 shrink-0"
           aria-label="Namma Pavagada Home"
         >
           <img
             src="/logo.png"
             alt="Namma Pavagada Emblem"
-            className="w-10 h-10 md:w-11 md:h-11 rounded-xl shadow-sm border border-soft-sand/80 object-cover shrink-0 group-hover:scale-105 transition-transform"
+            className="w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl shadow-xs border border-soft-sand/90 object-cover shrink-0 group-hover:scale-105 transition-transform"
           />
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl md:text-3xl font-serif font-black tracking-tight text-forest-green group-hover:text-terracotta transition-colors">
+          <div className="flex flex-col justify-center min-w-0">
+            <div className="flex items-center gap-2 whitespace-nowrap">
+              <span className="text-xl sm:text-2xl font-serif font-black tracking-tight text-forest-green group-hover:text-terracotta transition-colors leading-tight whitespace-nowrap">
                 NAMMA PAVAGADA
               </span>
-              <span className="hidden sm:inline text-base font-kannada text-earth-brown">
+              <span className="hidden sm:inline-block text-xs md:text-sm font-kannada text-earth-brown font-medium px-2 py-0.5 bg-soft-sand/40 rounded border border-soft-sand/60 whitespace-nowrap">
                 ನಮ್ಮ ಪಾವಗಡ
               </span>
             </div>
-            <div className="text-[11px] font-semibold tracking-wider text-muted-text uppercase flex items-center gap-2 mt-0.5">
+            <div className="text-[10px] sm:text-[11px] font-semibold tracking-wider text-muted-text uppercase flex items-center gap-1.5 sm:gap-2 mt-0.5 whitespace-nowrap">
               <span className="text-earth-brown font-bold">Heritage</span>
-              <span>×</span>
+              <span className="text-muted-text/40">×</span>
               <span className="text-forest-green font-bold">Explorer</span>
-              <span>×</span>
+              <span className="text-muted-text/40">×</span>
               <span className="text-terracotta font-bold">Community</span>
             </div>
           </div>
         </button>
 
         {/* Desktop Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-1.5" aria-label="Main Navigation">
+        <nav className="hidden lg:flex items-center gap-1 xl:gap-1.5 shrink-0" aria-label="Main Navigation">
           {navItems.map((item) => {
             const active = isItemActive(item.id);
             return (
               <button
                 key={item.id}
                 onClick={() => handleNavClick(item.id)}
-                className={`relative px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 flex items-center gap-1.5 ${
+                className={`relative px-2.5 xl:px-3.5 py-1.5 xl:py-2 rounded-lg text-xs xl:text-sm font-semibold transition-all duration-150 flex items-center gap-1.5 whitespace-nowrap ${
                   active
-                    ? 'bg-forest-green text-white shadow-sm'
+                    ? 'bg-forest-green text-white shadow-xs'
                     : 'text-dark-text hover:text-forest-green hover:bg-warm-cream'
                 }`}
               >
                 <span>{item.label}</span>
                 {item.badge && !active && (
-                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-soft-sand text-forest-green font-mono">
+                  <span className="hidden xl:inline-block text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-soft-sand text-forest-green font-mono">
                     {item.badge}
                   </span>
                 )}
@@ -111,7 +111,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onRouteChange }) =
           {/* Quick Search Shortcut Button */}
           <button
             onClick={() => handleNavClick('locations')}
-            className="ml-3 p-2.5 rounded-lg border border-soft-sand text-forest-green hover:bg-warm-cream hover:border-terracotta hover:text-terracotta transition-colors shadow-sm cursor-pointer"
+            className="ml-1.5 xl:ml-2.5 p-2 xl:p-2.5 rounded-lg border border-soft-sand text-forest-green hover:bg-warm-cream hover:border-terracotta hover:text-terracotta transition-colors shadow-xs cursor-pointer shrink-0"
             title="Search Places in Pavagada"
             aria-label="Search places"
           >
