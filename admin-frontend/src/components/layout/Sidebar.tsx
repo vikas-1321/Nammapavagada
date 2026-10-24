@@ -57,9 +57,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange }) => 
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-screen sticky top-0 select-none">
       {/* Brand Header */}
       <div className="p-5 border-b border-slate-800 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-forest flex items-center justify-center text-white shadow-md shadow-forest/30">
-          <ShieldCheck size={22} className="text-emerald-400" />
-        </div>
+        <img
+          src="/logo.png"
+          alt="Namma Pavagada Logo"
+          className="w-9 h-9 rounded-xl border border-slate-700/80 shadow-md object-cover"
+        />
         <div>
           <h1 className="font-bold text-base leading-tight text-white tracking-wide">Namma Pavagada</h1>
           <p className="text-[11px] text-emerald-400 font-medium tracking-wider uppercase">Admin CMS Portal</p>

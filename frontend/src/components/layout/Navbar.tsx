@@ -57,23 +57,30 @@ export const Navbar: React.FC<NavbarProps> = ({ currentRoute, onRouteChange }) =
         {/* Brand Identity */}
         <button
           onClick={() => handleNavClick('home')}
-          className="text-left group focus-visible:ring-2 focus-visible:ring-terracotta rounded-lg p-1 -ml-1 transition-transform"
+          className="text-left group focus-visible:ring-2 focus-visible:ring-terracotta rounded-xl p-1 -ml-1 transition-transform flex items-center gap-3"
           aria-label="Namma Pavagada Home"
         >
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl md:text-3xl font-serif font-black tracking-tight text-forest-green group-hover:text-terracotta transition-colors">
-              NAMMA PAVAGADA
-            </span>
-            <span className="hidden sm:inline text-base font-kannada text-earth-brown">
-              ನಮ್ಮ ಪಾವಗಡ
-            </span>
-          </div>
-          <div className="text-[11px] font-semibold tracking-wider text-muted-text uppercase flex items-center gap-2 mt-0.5">
-            <span className="text-earth-brown font-bold">Heritage</span>
-            <span>×</span>
-            <span className="text-forest-green font-bold">Explorer</span>
-            <span>×</span>
-            <span className="text-terracotta font-bold">Community</span>
+          <img
+            src="/logo.png"
+            alt="Namma Pavagada Emblem"
+            className="w-10 h-10 md:w-11 md:h-11 rounded-xl shadow-sm border border-soft-sand/80 object-cover shrink-0 group-hover:scale-105 transition-transform"
+          />
+          <div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl md:text-3xl font-serif font-black tracking-tight text-forest-green group-hover:text-terracotta transition-colors">
+                NAMMA PAVAGADA
+              </span>
+              <span className="hidden sm:inline text-base font-kannada text-earth-brown">
+                ನಮ್ಮ ಪಾವಗಡ
+              </span>
+            </div>
+            <div className="text-[11px] font-semibold tracking-wider text-muted-text uppercase flex items-center gap-2 mt-0.5">
+              <span className="text-earth-brown font-bold">Heritage</span>
+              <span>×</span>
+              <span className="text-forest-green font-bold">Explorer</span>
+              <span>×</span>
+              <span className="text-terracotta font-bold">Community</span>
+            </div>
           </div>
         </button>
 

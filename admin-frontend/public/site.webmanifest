@@ -1,0 +1,21 @@
+{
+  "name": "Namma Pavagada Admin",
+  "short_name": "NP Admin",
+  "description": "Administration Portal for Namma Pavagada.",
+  "icons": [
+    {
+      "src": "/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#0F172A",
+  "background_color": "#020617",
+  "display": "standalone",
+  "start_url": "/"
+}
