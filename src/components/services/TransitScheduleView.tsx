@@ -15,7 +15,9 @@ import {
   AlertTriangle,
   ArrowRight,
   Sparkles,
+  Flag,
 } from 'lucide-react';
+import { useFeedback } from '../../context/FeedbackContext';
 
 export interface TransitScheduleViewProps {
   routes: TransitScheduleItem[];
@@ -81,6 +83,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
   isLoading = false,
   error = null,
 }) => {
+  const { openFeedback } = useFeedback();
   const [activeFilter, setActiveFilter] = useState<FilterCategory>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [expandedRouteTimings, setExpandedRouteTimings] = useState<Record<string, boolean>>({});
@@ -677,6 +680,25 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
                       )}
                     </div>
                   )}
+                </div>
+
+                {/* 4. Contextual Issue Report Link */}
+                <div className="pt-2 flex items-center justify-end border-t border-slate-50">
+                  <button
+                    type="button"
+                    onClick={() => openFeedback({
+                      category: 'INCORRECT_INFO',
+                      relatedEntityType: 'BUS_ROUTE',
+                      relatedEntityId: route.id,
+                      relatedEntityName: `${originTitle} → ${destinationTitle} (${route.routeCode})`,
+                      defaultMessage: `I noticed incorrect bus timing or stop info on the route ${originTitle} to ${destinationTitle}: `,
+                    })}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 hover:text-terracotta transition-colors px-2 py-1 rounded-lg hover:bg-slate-50 cursor-pointer"
+                    title="Report outdated bus timing or missing stop on this route"
+                  >
+                    <Flag className="w-3.5 h-3.5" />
+                    <span>Report incorrect timing</span>
+                  </button>
                 </div>
               </div>
             );

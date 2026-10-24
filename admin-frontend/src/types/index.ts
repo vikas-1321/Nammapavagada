@@ -378,3 +378,55 @@ export interface DashboardOverview {
   recentLocations: LocationItem[];
   recentActivities: AuditLogItem[];
 }
+
+export type FeedbackCategory =
+  | 'GENERAL'
+  | 'INCORRECT_INFO'
+  | 'MISSING_PLACE_OR_SERVICE'
+  | 'WEBSITE_BUG'
+  | 'SUGGESTION'
+  | 'OTHER';
+
+export type FeedbackStatus =
+  | 'PENDING'
+  | 'UNDER_REVIEW'
+  | 'RESOLVED'
+  | 'REJECTED';
+
+export interface FeedbackItem {
+  id: string;
+  name: string;
+  email: string;
+  category: FeedbackCategory;
+  categoryLabel: string;
+  message: string;
+  pagePath: string;
+  relatedEntityType?: string | null;
+  relatedEntityId?: string | null;
+  relatedEntityName?: string | null;
+  status: FeedbackStatus;
+  statusLabel: string;
+  adminNotes?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FeedbackListResponse {
+  items: FeedbackItem[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  };
+  counts: {
+    total: number;
+    pending: number;
+    underReview: number;
+    resolved: number;
+    rejected: number;
+  };
+}
+

@@ -19,6 +19,8 @@ import {
   GroupedTags,
   DataFreshnessStats,
   DuplicateCandidate,
+  FeedbackItem,
+  FeedbackListResponse,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://3-6-201-177.sslip.io/api' || 'http://localhost:5000/api';
@@ -512,6 +514,48 @@ class AdminApiClient {
   public async toggleUserStatus(userId: number): Promise<AdminUser> {
     return this.request<AdminUser>(`/admin/users/${userId}/toggle-status`, {
       method: 'PATCH',
+    });
+  }
+
+  // --- Feedback Management ---
+  public async getFeedback(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    category?: string;
+    search?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<FeedbackListResponse> {
+    const qp = new URLSearchParams();
+    if (params?.page) qp.append('page', String(params.page));
+    if (params?.limit) qp.append('limit', String(params.limit));
+    if (params?.status && params.status !== 'ALL') qp.append('status', params.status);
+    if (params?.category && params.category !== 'ALL') qp.append('category', params.category);
+    if (params?.search) qp.append('search', params.search);
+    if (params?.startDate) qp.append('startDate', params.startDate);
+    if (params?.endDate) qp.append('endDate', params.endDate);
+    const qs = qp.toString();
+    return this.request<FeedbackListResponse>(`/admin/feedback${qs ? `?${qs}` : ''}`);
+  }
+
+  public async getFeedbackById(id: string): Promise<FeedbackItem> {
+    return this.request<FeedbackItem>(`/admin/feedback/${id}`);
+  }
+
+  public async updateFeedback(
+    id: string,
+    data: { status?: string; adminNotes?: string }
+  ): Promise<FeedbackItem> {
+    return this.request<FeedbackItem>(`/admin/feedback/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public async deleteFeedback(id: string): Promise<void> {
+    return this.request<void>(`/admin/feedback/${id}`, {
+      method: 'DELETE',
     });
   }
 

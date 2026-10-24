@@ -10,6 +10,9 @@ import { ServicesPage } from './pages/ServicesPage';
 import { MapPage } from './pages/MapPage';
 import { AboutPage } from './pages/AboutPage';
 import { Home, Compass, Landmark, HeartPulse, Map } from 'lucide-react';
+import { FeedbackProvider } from './context/FeedbackContext';
+import { FloatingFeedbackButton } from './components/feedback/FloatingFeedbackButton';
+import { FeedbackModal } from './components/feedback/FeedbackModal';
 
 export const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<PageRoute>('home');
@@ -40,88 +43,96 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-warm-cream text-dark-text font-sans selection:bg-terracotta selection:text-white pb-16 lg:pb-0">
-      {/* Accessibility Skip Link */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 bg-forest-green text-white px-4 py-2 text-xs uppercase font-bold border-2 border-terracotta rounded-lg shadow-lg"
-      >
-        Skip directly to main content
-      </a>
-
-      {/* Warm Header & Navigation */}
-      <Navbar currentRoute={currentRoute} onRouteChange={handleRouteChange} />
-
-      {/* Main Content Viewport */}
-      <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 lg:px-12">
-        {currentRoute === 'home' && <HomePage onRouteChange={handleRouteChange} />}
-        {currentRoute === 'about' && <AboutPage />}
-        {currentRoute === 'history' && <HistoryPage />}
-        {currentRoute === 'places' && <PlacesPage onRouteChange={handleRouteChange} />}
-        {currentRoute === 'locations' && <LocationsPage onRouteChange={handleRouteChange} />}
-        {currentRoute === 'services' && <ServicesPage />}
-        {currentRoute === 'map' && <MapPage />}
-      </main>
-
-      {/* Editorial Warm Forest Green Footer */}
-      <Footer onRouteChange={handleRouteChange} />
-
-      {/* Mobile Sticky Quick Navigation Bar (One-handed navigation) */}
-      <nav
-        className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-soft-sand px-3 py-2 flex items-center justify-around shadow-lg"
-        aria-label="Mobile Bottom Navigation"
-      >
-        <button
-          onClick={() => handleRouteChange('home')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-semibold py-1 px-2.5 rounded-lg transition-colors ${
-            currentRoute === 'home' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
-          }`}
+    <FeedbackProvider>
+      <div className="min-h-screen flex flex-col bg-warm-cream text-dark-text font-sans selection:bg-terracotta selection:text-white pb-16 lg:pb-0">
+        {/* Accessibility Skip Link */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 bg-forest-green text-white px-4 py-2 text-xs uppercase font-bold border-2 border-terracotta rounded-lg shadow-lg"
         >
-          <Home className="w-4 h-4" />
-          <span>Home</span>
-        </button>
+          Skip directly to main content
+        </a>
 
-        <button
-          onClick={() => handleRouteChange('locations')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-semibold py-1 px-2.5 rounded-lg transition-colors ${
-            currentRoute === 'locations' || currentRoute === 'places' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
-          }`}
-        >
-          <Compass className="w-4 h-4" />
-          <span>Explore</span>
-        </button>
+        {/* Warm Header & Navigation */}
+        <Navbar currentRoute={currentRoute} onRouteChange={handleRouteChange} />
 
-        <button
-          onClick={() => handleRouteChange('history')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-semibold py-1 px-2.5 rounded-lg transition-colors ${
-            currentRoute === 'history' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
-          }`}
-        >
-          <Landmark className="w-4 h-4" />
-          <span>Heritage</span>
-        </button>
+        {/* Main Content Viewport */}
+        <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 lg:px-12">
+          {currentRoute === 'home' && <HomePage onRouteChange={handleRouteChange} />}
+          {currentRoute === 'about' && <AboutPage />}
+          {currentRoute === 'history' && <HistoryPage />}
+          {currentRoute === 'places' && <PlacesPage onRouteChange={handleRouteChange} />}
+          {currentRoute === 'locations' && <LocationsPage onRouteChange={handleRouteChange} />}
+          {currentRoute === 'services' && <ServicesPage />}
+          {currentRoute === 'map' && <MapPage />}
+        </main>
 
-        <button
-          onClick={() => handleRouteChange('services')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-semibold py-1 px-2.5 rounded-lg transition-colors ${
-            currentRoute === 'services' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
-          }`}
-        >
-          <HeartPulse className="w-4 h-4" />
-          <span>Community</span>
-        </button>
+        {/* Floating Feedback Action Tab (Universal across all public pages) */}
+        <FloatingFeedbackButton />
 
-        <button
-          onClick={() => handleRouteChange('map')}
-          className={`flex flex-col items-center gap-1 text-[11px] font-semibold py-1 px-2.5 rounded-lg transition-colors ${
-            currentRoute === 'map' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
-          }`}
+        {/* Feedback & Problem Reporting Modal */}
+        <FeedbackModal />
+
+        {/* Editorial Warm Forest Green Footer */}
+        <Footer onRouteChange={handleRouteChange} />
+
+        {/* Mobile Sticky Quick Navigation Bar (One-handed navigation) */}
+        <nav
+          className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-soft-sand px-3 py-2 flex items-center justify-around shadow-lg"
+          aria-label="Mobile Bottom Navigation"
         >
-          <Map className="w-4 h-4" />
-          <span>Map</span>
-        </button>
-      </nav>
-    </div>
+          <button
+            onClick={() => handleRouteChange('home')}
+            className={`flex flex-col items-center gap-1 text-[11px] font-semibold py-1 px-2.5 rounded-lg transition-colors ${
+              currentRoute === 'home' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
+            }`}
+          >
+            <Home className="w-4 h-4" />
+            <span>Home</span>
+          </button>
+
+          <button
+            onClick={() => handleRouteChange('locations')}
+            className={`flex flex-col items-center gap-1 text-[11px] font-semibold py-1 px-2.5 rounded-lg transition-colors ${
+              currentRoute === 'locations' || currentRoute === 'places' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            <span>Explore</span>
+          </button>
+
+          <button
+            onClick={() => handleRouteChange('history')}
+            className={`flex flex-col items-center gap-1 text-[11px] font-semibold py-1 px-2.5 rounded-lg transition-colors ${
+              currentRoute === 'history' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
+            }`}
+          >
+            <Landmark className="w-4 h-4" />
+            <span>Heritage</span>
+          </button>
+
+          <button
+            onClick={() => handleRouteChange('services')}
+            className={`flex flex-col items-center gap-1 text-[11px] font-semibold py-1 px-2.5 rounded-lg transition-colors ${
+              currentRoute === 'services' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
+            }`}
+          >
+            <HeartPulse className="w-4 h-4" />
+            <span>Community</span>
+          </button>
+
+          <button
+            onClick={() => handleRouteChange('map')}
+            className={`flex flex-col items-center gap-1 text-[11px] font-semibold py-1 px-2.5 rounded-lg transition-colors ${
+              currentRoute === 'map' ? 'text-terracotta font-bold' : 'text-muted-text hover:text-forest-green'
+            }`}
+          >
+            <Map className="w-4 h-4" />
+            <span>Map</span>
+          </button>
+        </nav>
+      </div>
+    </FeedbackProvider>
   );
 };
 

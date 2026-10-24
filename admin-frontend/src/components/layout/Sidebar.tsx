@@ -12,6 +12,7 @@ import {
   Users,
   Settings,
   ShieldCheck,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -22,6 +23,7 @@ export type AdminTab =
   | 'buses'
   | 'history'
   | 'photos'
+  | 'feedback'
   | 'search'
   | 'database'
   | 'audit'
@@ -43,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange }) => 
     { id: 'buses', label: 'Bus Routes & Stops', icon: <Bus size={18} /> },
     { id: 'history', label: 'Historical Content', icon: <Landmark size={18} /> },
     { id: 'photos', label: 'Photos / Media (S3)', icon: <ImageIcon size={18} /> },
+    { id: 'feedback', label: 'User Feedback', icon: <MessageSquare size={18} /> },
     { id: 'search', label: 'Unified Search', icon: <Search size={18} /> },
     { id: 'database', label: 'Database Explorer', icon: <Database size={18} /> },
     { id: 'audit', label: 'Audit Trail', icon: <History size={18} /> },

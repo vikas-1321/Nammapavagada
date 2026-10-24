@@ -191,6 +191,64 @@ class ApiClient {
   }
 
   /**
+   * Primary POST request method.
+   * Throws ApiError on network or HTTP failures.
+   */
+  public async post<T>(
+    endpoint: string,
+    body?: unknown,
+    options: RequestOptions = {}
+  ): Promise<T> {
+    const url = this.buildUrl(endpoint);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(options.headers || {}),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+
+      if (!res.ok) {
+        let errorMsg = `Server returned HTTP ${res.status}`;
+        let errorCode = 'HTTP_ERROR';
+        try {
+          const errJson: ApiResponse<unknown> = await res.json();
+          if (errJson.error?.message) {
+            errorMsg = errJson.error.message;
+          }
+          if (errJson.error?.code) {
+            errorCode = errJson.error.code;
+          }
+        } catch {
+          // non-JSON response
+        }
+        throw new ApiError(errorMsg, res.status, errorCode, false);
+      }
+
+      const json: ApiResponse<T> = await res.json();
+      if (!json.success && json.error) {
+        throw new ApiError(
+          json.error.message || 'API request indicated failure',
+          res.status,
+          json.error.code || 'API_FAILURE',
+          false
+        );
+      }
+
+      return (json.data !== undefined ? json.data : json) as T;
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        throw err;
+      }
+      const errorText = err instanceof Error ? err.message : String(err);
+      throw new ApiError(`Network connection failure: ${errorText}`, 0, 'NETWORK_ERROR', true);
+    }
+  }
+
+  /**
    * Invalidate entire in-memory cache or specific URL prefix
    */
   public invalidateCache(prefix?: string): void {

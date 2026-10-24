@@ -17,6 +17,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab }) => {
     buses: { title: 'Bus Transportation Network', subtitle: 'Manage KSRTC/APSRTC bus routes, ordered stops, and timetable runs' },
     history: { title: 'Historical Heritage Content', subtitle: 'Authoritative eras, defense bastions, and documented academic citations' },
     photos: { title: 'Photo Management (Amazon S3)', subtitle: 'S3 media repository, primary covers, and Photo Request Workflow' },
+    feedback: { title: 'User Feedback & Issue Reports', subtitle: 'Review visitor suggestions, verify reported corrections, and manage resolution status' },
     search: { title: 'Unified Data Search', subtitle: 'Query across all entities, coordinates, and local records' },
     database: { title: 'Database Explorer', subtitle: 'Inspect, filter, and audit all stored records' },
     audit: { title: 'Administrative Audit Trail', subtitle: 'Immutable timestamped logs of all administrative modifications and diffs' },

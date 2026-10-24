@@ -13,6 +13,7 @@ from app.models.history_era import HistoryEra
 from app.models.historical_place import HistoricalPlace
 from app.models.photo import Photo
 from app.models.audit_log import AuditLog
+from app.models.feedback import Feedback
 
 from app.models.tag import Tag, place_tags
 
@@ -35,4 +36,5 @@ __all__ = [
     "HistoricalPlace",
     "Photo",
     "AuditLog",
+    "Feedback",
 ]

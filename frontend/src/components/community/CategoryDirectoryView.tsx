@@ -13,7 +13,9 @@ import {
   X,
   PhoneCall,
   CheckCircle2,
+  Flag,
 } from 'lucide-react';
+import { useFeedback } from '../../context/FeedbackContext';
 import { CommunityCategoryMeta, CommunityPlace } from '../../types/community';
 import { LoadingState } from '../common/LoadingState';
 import { ErrorState } from '../common/ErrorState';
@@ -40,6 +42,7 @@ export const CategoryDirectoryView: React.FC<CategoryDirectoryViewProps> = ({
   onSelectCategory,
   allCategories = [],
 }) => {
+  const { openFeedback } = useFeedback();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypeFilter, setSelectedTypeFilter] = useState('ALL');
   const [activePlaceModal, setActivePlaceModal] = useState<CommunityPlace | null>(null);
@@ -447,9 +450,9 @@ export const CategoryDirectoryView: React.FC<CategoryDirectoryViewProps> = ({
                 </div>
               )}
 
-              {/* Contact Phone */}
-              {activePlaceModal.phone && (
-                <div className="pt-2">
+              {/* Contact Phone & Report incorrect info */}
+              <div className="pt-3 border-t border-soft-sand/50 flex flex-wrap items-center justify-between gap-2">
+                {activePlaceModal.phone ? (
                   <a
                     href={`tel:${activePlaceModal.phone.split('/')[0].trim()}`}
                     className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl bg-forest-green text-white hover:bg-forest-green-dark transition-colors shadow-xs"
@@ -457,8 +460,28 @@ export const CategoryDirectoryView: React.FC<CategoryDirectoryViewProps> = ({
                     <Phone className="w-4 h-4" />
                     <span>Call: {activePlaceModal.phone}</span>
                   </a>
-                </div>
-              )}
+                ) : <div />}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const place = activePlaceModal;
+                    setActivePlaceModal(null);
+                    openFeedback({
+                      category: 'INCORRECT_INFO',
+                      relatedEntityType: category.id.toUpperCase(),
+                      relatedEntityId: place.id,
+                      relatedEntityName: place.name,
+                      defaultMessage: `I noticed an issue or incorrect detail for ${place.name}: `,
+                    });
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-text hover:text-terracotta transition-colors px-2.5 py-1.5 rounded-lg hover:bg-warm-cream cursor-pointer"
+                  title="Report outdated address, phone, timings, or service"
+                >
+                  <Flag className="w-3.5 h-3.5" />
+                  <span>Report incorrect info</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

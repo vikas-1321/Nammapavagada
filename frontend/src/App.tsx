@@ -10,6 +10,9 @@ import { ServicesPage } from './pages/ServicesPage';
 import { MapPage } from './pages/MapPage';
 import { AboutPage } from './pages/AboutPage';
 import { Home, Compass, Landmark, HeartPulse, Map } from 'lucide-react';
+import { FeedbackProvider } from './context/FeedbackContext';
+import { FloatingFeedbackButton } from './components/feedback/FloatingFeedbackButton';
+import { FeedbackModal } from './components/feedback/FeedbackModal';
 
 export const App: React.FC = () => {
   const [currentRoute, setCurrentRoute] = useState<PageRoute>('home');
@@ -40,31 +43,38 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-warm-cream text-dark-text font-sans selection:bg-terracotta selection:text-white pb-16 lg:pb-0">
-      {/* Accessibility Skip Link */}
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 bg-forest-green text-white px-4 py-2 text-xs uppercase font-bold border-2 border-terracotta rounded-lg shadow-lg"
-      >
-        Skip directly to main content
-      </a>
+    <FeedbackProvider>
+      <div className="min-h-screen flex flex-col bg-warm-cream text-dark-text font-sans selection:bg-terracotta selection:text-white pb-16 lg:pb-0">
+        {/* Accessibility Skip Link */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 bg-forest-green text-white px-4 py-2 text-xs uppercase font-bold border-2 border-terracotta rounded-lg shadow-lg"
+        >
+          Skip directly to main content
+        </a>
 
-      {/* Warm Header & Navigation */}
-      <Navbar currentRoute={currentRoute} onRouteChange={handleRouteChange} />
+        {/* Warm Header & Navigation */}
+        <Navbar currentRoute={currentRoute} onRouteChange={handleRouteChange} />
 
-      {/* Main Content Viewport */}
-      <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 lg:px-12">
-        {currentRoute === 'home' && <HomePage onRouteChange={handleRouteChange} />}
-        {currentRoute === 'about' && <AboutPage />}
-        {currentRoute === 'history' && <HistoryPage />}
-        {currentRoute === 'places' && <PlacesPage onRouteChange={handleRouteChange} />}
-        {currentRoute === 'locations' && <LocationsPage onRouteChange={handleRouteChange} />}
-        {currentRoute === 'services' && <ServicesPage />}
-        {currentRoute === 'map' && <MapPage />}
-      </main>
+        {/* Main Content Viewport */}
+        <main id="main-content" className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-8 lg:px-12">
+          {currentRoute === 'home' && <HomePage onRouteChange={handleRouteChange} />}
+          {currentRoute === 'about' && <AboutPage />}
+          {currentRoute === 'history' && <HistoryPage />}
+          {currentRoute === 'places' && <PlacesPage onRouteChange={handleRouteChange} />}
+          {currentRoute === 'locations' && <LocationsPage onRouteChange={handleRouteChange} />}
+          {currentRoute === 'services' && <ServicesPage />}
+          {currentRoute === 'map' && <MapPage />}
+        </main>
 
-      {/* Editorial Warm Forest Green Footer */}
-      <Footer onRouteChange={handleRouteChange} />
+        {/* Floating Feedback Action Tab (Universal across all public pages) */}
+        <FloatingFeedbackButton />
+
+        {/* Feedback & Problem Reporting Modal */}
+        <FeedbackModal />
+
+        {/* Editorial Warm Forest Green Footer */}
+        <Footer onRouteChange={handleRouteChange} />
 
       {/* Mobile Sticky Quick Navigation Bar (One-handed navigation) */}
       <nav
@@ -122,7 +132,8 @@ export const App: React.FC = () => {
         </button>
       </nav>
     </div>
-  );
+  </FeedbackProvider>
+);
 };
 
 export default App;
