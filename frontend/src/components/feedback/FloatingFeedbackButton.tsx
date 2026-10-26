@@ -28,26 +28,26 @@ export const FloatingFeedbackButton: React.FC = () => {
         aria-haspopup="dialog"
         aria-expanded={isOpen}
         title="Share Feedback / ಸಲಹೆ ಅಥವಾ ತಪ್ಪು ಮಾಹಿತಿ ವರದಿ ಮಾಡಿ"
-        className="group relative flex items-center gap-2 py-3.5 px-3 bg-terracotta text-white rounded-l-2xl rounded-r-none shadow-xl shadow-terracotta/25 border-t border-b border-l border-white/20 hover:bg-[#b04f2f] hover:shadow-2xl hover:shadow-terracotta/40 hover:-translate-x-1 active:translate-x-0 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-terracotta cursor-pointer"
+        className="group relative flex items-center gap-1.5 py-2 px-2 bg-terracotta text-white rounded-l-lg rounded-r-none shadow-md shadow-terracotta/25 border-t border-b border-l border-white/20 hover:bg-[#b04f2f] hover:shadow-lg hover:shadow-terracotta/40 hover:-translate-x-0.5 active:translate-x-0 transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-terracotta cursor-pointer"
         style={{
-          boxShadow: '-4px 4px 18px rgba(198, 93, 58, 0.35)',
+          boxShadow: '-2px 2px 10px rgba(198, 93, 58, 0.28)',
         }}
       >
         {/* Subtle accent indicator dot */}
         <span
-          className="absolute -left-1 top-2 w-2 h-2 rounded-full bg-amber-300 ring-2 ring-white/80 animate-pulse"
+          className="absolute -left-0.5 top-1.5 w-1.5 h-1.5 rounded-full bg-amber-300 ring-1 ring-white/80 animate-pulse"
           aria-hidden="true"
         />
 
         {/* Message Icon with subtle micro-bounce on hover */}
         <div className="flex items-center justify-center text-white group-hover:scale-110 transition-transform duration-200">
-          <MessageSquarePlus className="w-5 h-5 drop-shadow-sm" aria-hidden="true" />
+          <MessageSquarePlus className="w-3.5 h-3.5 drop-shadow-xs" aria-hidden="true" />
         </div>
 
         {/* Vertical Text Label */}
         <span
-          className="text-xs font-bold tracking-wider uppercase font-sans [writing-mode:vertical-rl] rotate-180 drop-shadow-sm group-hover:text-amber-100 transition-colors"
-          style={{ letterSpacing: '0.12em' }}
+          className="text-[10px] font-bold tracking-wider uppercase font-sans [writing-mode:vertical-rl] rotate-180 drop-shadow-2xs group-hover:text-amber-100 transition-colors"
+          style={{ letterSpacing: '0.1em' }}
         >
           Feedback
         </span>

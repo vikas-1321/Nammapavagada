@@ -605,7 +605,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
                 className="overflow-hidden rounded-xl border border-[#dcdad3] bg-white shadow-[0_8px_28px_rgba(31,42,34,0.045)] transition-all hover:border-[#c8c6be]"
               >
                 {/* Route Header Row */}
-                <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="px-5 py-4">
                   <div className="min-w-0">
                     {/* Badges Row */}
                     <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -636,14 +636,14 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
                       </span>
                     </div>
 
-                    {/* Route Heading + Via */}
+                    {/* Route Heading + Via + Mobile-style Bus Badge */}
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
-                      <h2 className="text-xl leading-tight font-bold tracking-[-0.025em] text-[#162019] sm:text-2xl font-sans">
-                        {originDisplay}{' '}
-                        <span className="px-1 font-normal text-[#9aa19b]">→</span>{' '}
-                        {destinationDisplay}
-                        {/* Mobile bus count pill */}
-                        <span className="ml-2 inline-flex -translate-y-0.5 rounded-full bg-[#e4eee7] px-2 py-1 align-middle text-[9px] leading-none font-bold tracking-normal text-[#326145] sm:hidden">
+                      <h2 className="text-xl leading-tight font-bold tracking-[-0.025em] text-[#162019] sm:text-2xl font-sans inline-flex items-center flex-wrap gap-1.5">
+                        <span>{originDisplay}</span>
+                        <span className="px-0.5 font-normal text-[#9aa19b]">→</span>
+                        <span>{destinationDisplay}</span>
+                        {/* Bus count pill (styled as in mobile phone for all screen sizes) */}
+                        <span className="inline-flex -translate-y-0.5 rounded-full bg-[#e4eee7] px-2.5 py-1 align-middle text-[9px] sm:text-[10px] leading-none font-bold tracking-normal text-[#326145]">
                           {totalBuses} bus{totalBuses !== 1 ? 'es' : ''}
                         </span>
                       </h2>
@@ -651,22 +651,6 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
                         Via: {viaDisplay}
                       </p>
                     </div>
-                  </div>
-
-                  {/* Scheduled Departures Summary Panel (Desktop Right) */}
-                  <div className="hidden shrink-0 items-center gap-4 rounded-lg border border-[#e4e3dd] bg-[#faf9f6] px-4 py-2.5 sm:flex lg:text-right">
-                    <div>
-                      <p className="text-[9px] font-bold tracking-[0.1em] text-[#8b908a] uppercase font-sans">
-                        Scheduled departures
-                      </p>
-                      <p className="mt-0.5 text-sm font-bold text-[#26342b] font-sans">
-                        {totalBuses} service{totalBuses !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    <div className="h-8 w-px bg-[#deded8]" />
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#e4eee7] text-[#326145]">
-                      <Clock className="w-3.5 h-3.5" />
-                    </span>
                   </div>
                 </div>
 
