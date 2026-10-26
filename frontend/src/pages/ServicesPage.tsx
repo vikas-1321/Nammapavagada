@@ -186,21 +186,6 @@ export const ServicesPage: React.FC = () => {
       {/* 2. Dedicated Category Page: Bus & Transport */}
       {activeCategory === 'transport' && activeCategoryMeta && (
         <div className="space-y-8 animate-fadeIn pb-12">
-          {/* Top Breadcrumb */}
-          <div className="flex items-center justify-between border-b border-soft-sand pb-4">
-            <button
-              type="button"
-              onClick={handleBackToDirectory}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-forest-green transition-colors group rounded-lg px-2 py-1 cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
-              <span>Back to All Categories</span>
-            </button>
-            <span className="text-xs font-mono text-slate-500 uppercase tracking-wider hidden sm:inline">
-              Transit Corridors · Pavagada Central Station
-            </span>
-          </div>
-
           {/* Redesigned Bus & Transport View matching reference screenshots */}
           <TransitScheduleView
             routes={transitRoutes}
@@ -209,6 +194,7 @@ export const ServicesPage: React.FC = () => {
             isRefreshing={isRefreshingTransit}
             lastSyncedAt={transitLastSyncedAt}
             isApiLoaded={isTransitApiLoaded}
+            onBackToDirectory={handleBackToDirectory}
           />
 
           {/* Footer Category Switcher */}

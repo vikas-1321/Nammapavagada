@@ -1,23 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { TransitScheduleItem, TransitTiming } from '../../types/service';
-import {
-  Bus,
-  MapPin,
-  Clock,
-  ChevronDown,
-  Search,
-  X,
-  RotateCw,
-  AlertCircle,
-  Phone,
-  Info,
-  Calendar,
-  AlertTriangle,
-  ArrowRight,
-  Sparkles,
-  Flag,
-} from 'lucide-react';
 import { useFeedback } from '../../context/FeedbackContext';
+import {
+  ArrowLeft,
+  Phone,
+  RotateCw,
+  Search,
+  Clock,
+  Flag,
+  X,
+  AlertCircle,
+} from 'lucide-react';
 
 export interface TransitScheduleViewProps {
   routes: TransitScheduleItem[];
@@ -31,12 +24,27 @@ export interface TransitScheduleViewProps {
   onBackToDirectory?: () => void;
 }
 
-// Clean station titles without repeating boilerplate
+type FilterCategory = 'All Buses' | 'Departing' | 'Passing' | 'Express' | 'Ordinary' | 'Non-Stop';
+
+// Parse departure time to minutes from midnight for accurate chronological sorting
+const parseTimeToMinutes = (timeStr?: string): number => {
+  if (!timeStr) return 9999;
+  const match = timeStr.trim().match(/(\d{1,2}):(\d{2})(?:\s*([APap][Mm]))?/);
+  if (!match) return 9999;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const meridiem = match[3]?.toUpperCase();
+  if (meridiem === 'PM' && hours < 12) hours += 12;
+  if (meridiem === 'AM' && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+// Clean station title for display
 const cleanStationTitle = (name: string): string => {
   if (!name) return '';
   return name
-    .replace(/\s*\(Kempegowda Bus Station \/ Majestic\)/gi, ' Majestic')
-    .replace(/\s*\(Majestic\)/gi, ' Majestic')
+    .replace(/\s*\(Kempegowda Bus Station \/ Majestic\)/gi, '')
+    .replace(/\s*\(Majestic\)/gi, '')
     .replace(/\s*KSRTC Bus Station/gi, '')
     .replace(/\s*Central Bus Stand/gi, '')
     .replace(/\s*Bus Station/gi, '')
@@ -45,248 +53,366 @@ const cleanStationTitle = (name: string): string => {
     .trim();
 };
 
-// Parse departure time string into minutes from midnight for accurate chronological sorting
-const parseTimeToMinutes = (timeStr?: string): number => {
-  if (!timeStr) return 9999;
-  const clean = timeStr.trim().toUpperCase();
-  const match = clean.match(/(\d{1,2}):(\d{2})(?:\s*([AP]M))?/);
-  if (!match) return 9999;
-  let hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const meridiem = match[3];
+// Determine intermediate via places
+const getViaDisplay = (route: TransitScheduleItem): string => {
+  const isPassing =
+    route.routeClassification === 'PASSING_THROUGH' ||
+    !route.source.toLowerCase().includes('pavagada');
 
-  if (meridiem === 'PM' && hours < 12) hours += 12;
-  if (meridiem === 'AM' && hours === 12) hours = 0;
-  // If 24-hour format (e.g. 13:30, 19:15)
-  return hours * 60 + minutes;
+  let viaList: string[] = [];
+  if (Array.isArray(route.via) && route.via.length > 0) {
+    viaList = [...route.via];
+  } else if (route.stops && route.stops.length > 2) {
+    viaList = route.stops
+      .slice(1, -1)
+      .map((s) => s.stopName.replace(/ Bus (Stand|Stop|Station)$/i, ''));
+  }
+
+  if (isPassing) {
+    const hasPavagadaInVia = viaList.some((v) => v.toLowerCase().includes('pavagada'));
+    if (!hasPavagadaInVia) {
+      viaList.unshift('Pavagada Bus Stand');
+    }
+  }
+
+  return viaList.length > 0 ? viaList.join(', ') : 'Direct highway route';
 };
 
-// Format operational days string
-const formatOperatingDays = (dayType?: string): string => {
-  if (!dayType) return 'Daily';
-  const dt = dayType.toUpperCase();
-  if (dt === 'DAILY') return 'Daily';
-  if (dt === 'MON_SAT') return 'Mon–Sat';
-  if (dt === 'MON_FRI') return 'Mon–Fri';
-  if (dt === 'SUNDAY') return 'Sundays';
-  return dayType;
+// Helper to determine the primary service type for a route card header
+const getPrimaryServiceType = (route: TransitScheduleItem): string => {
+  if (!route.timings || route.timings.length === 0) {
+    return 'ORDINARY';
+  }
+  const counts: Record<string, number> = {};
+  for (const t of route.timings) {
+    const sc = (t.serviceClass || t.busType || 'ORDINARY').toUpperCase();
+    counts[sc] = (counts[sc] || 0) + 1;
+  }
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  return sorted[0]?.[0] || 'ORDINARY';
 };
-
-type FilterCategory = 'ALL' | 'DEPARTING' | 'PASSING' | 'EXPRESS' | 'ORDINARY' | 'NON_STOP';
 
 export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
   routes,
-  registeredStopsCount,
   onRefresh,
   isRefreshing = false,
-  isApiLoaded = false,
   isLoading = false,
   error = null,
+  onBackToDirectory,
 }) => {
-  const { openFeedback } = useFeedback();
-  const [activeFilter, setActiveFilter] = useState<FilterCategory>('ALL');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [expandedRouteTimings, setExpandedRouteTimings] = useState<Record<string, boolean>>({});
+  const [activeFilter, setActiveFilter] = useState<FilterCategory>('All Buses');
+  const [query, setQuery] = useState<string>('');
+  const [expandedRoutes, setExpandedRoutes] = useState<Record<string, boolean>>({});
+  const [justRefreshed, setJustRefreshed] = useState<boolean>(false);
 
-  // Flatten all timings across all routes to calculate comprehensive stats
-  const allTimings = useMemo(() => {
-    const list: TransitTiming[] = [];
-    routes.forEach((r) => {
-      if (r.timings && Array.isArray(r.timings)) {
-        list.push(...r.timings);
-      }
-    });
-    return list;
-  }, [routes]);
+  // Hook into central feedback system for reporting incorrect bus timings
+  let feedbackContext: ReturnType<typeof useFeedback> | null = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    feedbackContext = useFeedback();
+  } catch {
+    feedbackContext = null;
+  }
 
-  // Dynamic statistics calculated strictly from the imported records
-  const stats = useMemo(() => {
-    const totalEntries = allTimings.length;
-
-    // Distinct destinations
-    const destinations = new Set<string>();
-    allTimings.forEach((t) => {
-      const dest = t.sourceDestination || routes.find((r) => r.id === t.routeId)?.destination;
-      if (dest) destinations.add(dest.trim());
-    });
-    if (destinations.size === 0) {
-      routes.forEach((r) => {
-        if (r.destination) destinations.add(r.destination.trim());
-      });
+  const handleRefresh = useCallback(async () => {
+    if (onRefresh) {
+      await onRefresh();
     }
+    setJustRefreshed(true);
+    setTimeout(() => setJustRefreshed(false), 1500);
+  }, [onRefresh]);
 
-    // Service class counts
-    let expressCount = 0;
-    let ordinaryCount = 0;
-    let nonStopCount = 0;
-    let departingCount = 0;
-    let passingCount = 0;
-
-    allTimings.forEach((t) => {
-      const sClass = (t.serviceClass || t.busType || '').toLowerCase();
-      if (sClass.includes('non-stop') || sClass.includes('non stop') || sClass === 'nonstop') {
-        nonStopCount++;
-      } else if (sClass.includes('express')) {
-        expressCount++;
-      } else {
-        ordinaryCount++;
-      }
-
-      const isPassing =
-        t.routeClassification === 'PASSING_THROUGH' ||
-        (t.sourceOrigin && t.sourceOrigin.toLowerCase() !== 'pavagada');
-      if (isPassing) {
-        passingCount++;
-      } else {
-        departingCount++;
-      }
-    });
-
-    return {
-      totalEntries,
-      distinctDestinations: destinations.size,
-      expressCount,
-      ordinaryCount,
-      nonStopCount,
-      departingCount,
-      passingCount,
-      totalRoutes: routes.length,
-    };
-  }, [routes, allTimings]);
-
-  // Filter routes and their timings based on both the selected filter and search query
-  const filteredRoutes = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    return routes
-      .map((route) => {
-        const timings = route.timings || [];
-
-        // Filter timings inside the route
-        const matchingTimings = timings.filter((timing) => {
-          // 1. Filter Tab Match
-          if (activeFilter === 'DEPARTING') {
-            const isPassing =
-              timing.routeClassification === 'PASSING_THROUGH' ||
-              (timing.sourceOrigin && timing.sourceOrigin.toLowerCase() !== 'pavagada');
-            if (isPassing) return false;
-          } else if (activeFilter === 'PASSING') {
-            const isPassing =
-              timing.routeClassification === 'PASSING_THROUGH' ||
-              (timing.sourceOrigin && timing.sourceOrigin.toLowerCase() !== 'pavagada');
-            if (!isPassing) return false;
-          } else if (activeFilter === 'EXPRESS') {
-            const cls = (timing.serviceClass || timing.busType || '').toLowerCase();
-            if (!cls.includes('express')) return false;
-          } else if (activeFilter === 'ORDINARY') {
-            const cls = (timing.serviceClass || timing.busType || '').toLowerCase();
-            if (cls.includes('express') || cls.includes('non-stop')) return false;
-          } else if (activeFilter === 'NON_STOP') {
-            const cls = (timing.serviceClass || timing.busType || '').toLowerCase();
-            if (!cls.includes('non-stop') && !cls.includes('non stop')) return false;
-          }
-
-          // 2. Search Query Match
-          if (query) {
-            const orig = (timing.sourceOrigin || route.source || '').toLowerCase();
-            const dest = (timing.sourceDestination || route.destination || '').toLowerCase();
-            const via = (timing.viaPlace || (route.via ? route.via.join(' ') : '')).toLowerCase();
-            const sClass = (timing.serviceClass || timing.busType || '').toLowerCase();
-            const depTime = (timing.departureTime || '').toLowerCase();
-            const slNo = timing.serialNumber ? timing.serialNumber.toString() : '';
-
-            const matchesTiming =
-              dest.includes(query) ||
-              orig.includes(query) ||
-              via.includes(query) ||
-              sClass.includes(query) ||
-              depTime.includes(query) ||
-              slNo === query;
-
-            if (!matchesTiming) return false;
-          }
-
-          return true;
-        });
-
-        // Check if route itself matches query (for routes with no timings or general title matches)
-        const routeMatchesQuery = query
-          ? route.source.toLowerCase().includes(query) ||
-            route.destination.toLowerCase().includes(query) ||
-            route.routeCode.toLowerCase().includes(query) ||
-            (route.via && route.via.some((v) => v.toLowerCase().includes(query)))
-          : true;
-
-        // If filter tab is set to DEPARTING / PASSING, route level check
-        const isRoutePassing =
-          route.routeClassification === 'PASSING_THROUGH' ||
-          route.source.toLowerCase() !== 'pavagada';
-        let routeMatchesFilter = true;
-        if (activeFilter === 'DEPARTING' && isRoutePassing) routeMatchesFilter = false;
-        if (activeFilter === 'PASSING' && !isRoutePassing) routeMatchesFilter = false;
-
-        // Keep route if it has matching timings, or if no timings exist but route matches query & filter
-        const shouldInclude =
-          matchingTimings.length > 0 || (timings.length === 0 && routeMatchesQuery && routeMatchesFilter);
-
-        if (!shouldInclude) return null;
-
-        // Sort matched timings chronologically while preserving serial numbers
-        const sortedTimings = [...matchingTimings].sort(
-          (a, b) => parseTimeToMinutes(a.departureTime) - parseTimeToMinutes(b.departureTime)
-        );
-
-        return {
-          ...route,
-          matchedTimings: sortedTimings,
-        };
-      })
-      .filter((r): r is TransitScheduleItem & { matchedTimings: TransitTiming[] } => r !== null);
-  }, [routes, activeFilter, searchQuery]);
-
-  // Total filtered timings count
-  const totalFilteredTimingsCount = useMemo(() => {
-    return filteredRoutes.reduce((acc, r) => acc + (r.matchedTimings?.length || 0), 0);
-  }, [filteredRoutes]);
-
-  const toggleTimings = (routeId: string) => {
-    setExpandedRouteTimings((prev) => ({
+  const toggleTimetable = (routeId: string) => {
+    setExpandedRoutes((prev) => ({
       ...prev,
-      [routeId]: !(prev[routeId] ?? true), // Default to expanded for immediate timetable clarity
+      [routeId]: !prev[routeId],
     }));
   };
 
-  // Loading Skeleton State
+  const handleReportTiming = (route: TransitScheduleItem) => {
+    if (feedbackContext) {
+      feedbackContext.openFeedback({
+        category: 'INCORRECT_INFO',
+        relatedEntityType: 'TRANSIT_BUS',
+        relatedEntityId: route.id,
+        relatedEntityName: `${route.source} → ${route.destination} (${route.routeCode})`,
+        defaultMessage: `I want to report an incorrect timing or missing service on route ${route.routeCode} (${route.source} to ${route.destination}):\n\n- Correct departure time:\n- Service type:\n- Details:`,
+      });
+    } else {
+      window.location.href = `mailto:admin@nammapavagada.in?subject=Report%20Incorrect%20Bus%20Timing%20${encodeURIComponent(
+        route.routeCode
+      )}&body=${encodeURIComponent(
+        `Route: ${route.source} to ${route.destination} (${route.routeCode})\n\nPlease describe the correction:`
+      )}`;
+    }
+  };
+
+  // Compute dynamic counts from authentic backend data
+  const filterCounts = useMemo(() => {
+    let allCount = 0;
+    let departingCount = 0;
+    let passingCount = 0;
+    let expressCount = 0;
+    let ordinaryCount = 0;
+    let nonStopCount = 0;
+
+    routes.forEach((route) => {
+      const isDeparting =
+        route.routeClassification === 'DEPARTING' ||
+        route.source.toLowerCase().includes('pavagada');
+
+      const timings = route.timings || [];
+      const routeTimingsCount = timings.length;
+
+      allCount += routeTimingsCount;
+      if (isDeparting) {
+        departingCount += routeTimingsCount;
+      } else {
+        passingCount += routeTimingsCount;
+      }
+
+      timings.forEach((t) => {
+        const sc = (t.serviceClass || t.busType || '').toLowerCase();
+        if (sc.includes('non-stop') || sc.includes('nonstop')) {
+          nonStopCount++;
+        } else if (sc.includes('express')) {
+          expressCount++;
+        } else if (sc.includes('ordinary') || !sc) {
+          ordinaryCount++;
+        } else {
+          ordinaryCount++;
+        }
+      });
+    });
+
+    return {
+      'All Buses': allCount,
+      Departing: departingCount,
+      Passing: passingCount,
+      Express: expressCount,
+      Ordinary: ordinaryCount,
+      'Non-Stop': nonStopCount,
+    };
+  }, [routes]);
+
+  const filterTabs: Array<{ label: FilterCategory; count: number }> = [
+    { label: 'All Buses', count: filterCounts['All Buses'] },
+    { label: 'Departing', count: filterCounts['Departing'] },
+    { label: 'Passing', count: filterCounts['Passing'] },
+    { label: 'Express', count: filterCounts['Express'] },
+    { label: 'Ordinary', count: filterCounts['Ordinary'] },
+    { label: 'Non-Stop', count: filterCounts['Non-Stop'] },
+  ];
+
+  // Filter routes based on selected tab and search query
+  const filteredRoutes = useMemo(() => {
+    const q = query.toLowerCase().trim();
+
+    return routes.filter((route) => {
+      const isDeparting =
+        route.routeClassification === 'DEPARTING' ||
+        route.source.toLowerCase().includes('pavagada');
+      const isPassing = !isDeparting;
+
+      const timings = route.timings || [];
+
+      // Category tab filtering
+      if (activeFilter === 'Departing' && !isDeparting) return false;
+      if (activeFilter === 'Passing' && !isPassing) return false;
+      if (activeFilter === 'Express') {
+        const hasExpress = timings.some((t) =>
+          (t.serviceClass || t.busType || '').toLowerCase().includes('express')
+        );
+        if (!hasExpress) return false;
+      }
+      if (activeFilter === 'Ordinary') {
+        const hasOrdinary = timings.some((t) => {
+          const sc = (t.serviceClass || t.busType || '').toLowerCase();
+          return sc.includes('ordinary') || !sc;
+        });
+        if (!hasOrdinary) return false;
+      }
+      if (activeFilter === 'Non-Stop') {
+        const hasNonStop = timings.some((t) => {
+          const sc = (t.serviceClass || t.busType || '').toLowerCase();
+          return sc.includes('non-stop') || sc.includes('nonstop');
+        });
+        if (!hasNonStop) return false;
+      }
+
+      // Search query filtering
+      if (q) {
+        const srcMatch = route.source?.toLowerCase().includes(q);
+        const destMatch = route.destination?.toLowerCase().includes(q);
+        const codeMatch = route.routeCode?.toLowerCase().includes(q);
+        const opMatch = route.operator?.toLowerCase().includes(q);
+        const viaMatch = Array.isArray(route.via) && route.via.some((v) => v.toLowerCase().includes(q));
+        const stopMatch =
+          Array.isArray(route.stops) &&
+          route.stops.some(
+            (s) =>
+              s.stopName?.toLowerCase().includes(q) ||
+              (s.kannadaName && s.kannadaName.toLowerCase().includes(q))
+          );
+        const timingMatch = timings.some(
+          (t) =>
+            t.remarks?.toLowerCase().includes(q) ||
+            t.viaPlace?.toLowerCase().includes(q) ||
+            t.departureTime?.toLowerCase().includes(q)
+        );
+
+        if (!srcMatch && !destMatch && !codeMatch && !opMatch && !viaMatch && !stopMatch && !timingMatch) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [routes, activeFilter, query]);
+
+  // Compute total departures in filtered view
+  const filteredDeparturesCount = useMemo(() => {
+    return filteredRoutes.reduce((acc, r) => {
+      const timings = r.timings || [];
+      if (activeFilter === 'All Buses' || activeFilter === 'Departing' || activeFilter === 'Passing') {
+        return acc + timings.length;
+      }
+      if (activeFilter === 'Express') {
+        return (
+          acc +
+          timings.filter((t) =>
+            (t.serviceClass || t.busType || '').toLowerCase().includes('express')
+          ).length
+        );
+      }
+      if (activeFilter === 'Ordinary') {
+        return (
+          acc +
+          timings.filter((t) => {
+            const sc = (t.serviceClass || t.busType || '').toLowerCase();
+            return sc.includes('ordinary') || !sc;
+          }).length
+        );
+      }
+      if (activeFilter === 'Non-Stop') {
+        return (
+          acc +
+          timings.filter((t) => {
+            const sc = (t.serviceClass || t.busType || '').toLowerCase();
+            return sc.includes('non-stop') || sc.includes('nonstop');
+          }).length
+        );
+      }
+      return acc + timings.length;
+    }, 0);
+  }, [filteredRoutes, activeFilter]);
+
+  // Helper to group timings by service class for the expanded timetable view
+  const groupRouteTimings = (timings?: TransitTiming[]) => {
+    if (!timings || timings.length === 0) return [];
+
+    const express: TransitTiming[] = [];
+    const nonStop: TransitTiming[] = [];
+    const ordinary: TransitTiming[] = [];
+    const others: TransitTiming[] = [];
+
+    const sorted = [...timings].sort(
+      (a, b) => parseTimeToMinutes(a.departureTime) - parseTimeToMinutes(b.departureTime)
+    );
+
+    sorted.forEach((t) => {
+      const sc = (t.serviceClass || t.busType || '').toLowerCase();
+      if (sc.includes('non-stop') || sc.includes('nonstop')) {
+        nonStop.push(t);
+      } else if (sc.includes('express')) {
+        express.push(t);
+      } else if (sc.includes('ordinary') || !sc) {
+        ordinary.push(t);
+      } else {
+        others.push(t);
+      }
+    });
+
+    const groups = [];
+    if (express.length > 0) {
+      groups.push({
+        key: 'EXPRESS',
+        label: 'EXPRESS',
+        badgeClass: 'bg-[#e3ece6] text-[#356046]',
+        borderClass: 'border-[#dce5de]',
+        chipBg: 'bg-[#f3f6f3] text-[#233329]',
+        count: express.length,
+        timings: express,
+      });
+    }
+    if (nonStop.length > 0) {
+      groups.push({
+        key: 'NON-STOP',
+        label: 'NON-STOP',
+        badgeClass: 'bg-[#f2ede1] text-[#6f5a2c]',
+        borderClass: 'border-[#e3ded1]',
+        chipBg: 'bg-[#f7f5f0] text-[#3b3425]',
+        count: nonStop.length,
+        timings: nonStop,
+      });
+    }
+    if (ordinary.length > 0) {
+      groups.push({
+        key: 'ORDINARY',
+        label: 'ORDINARY',
+        badgeClass: 'bg-[#eceef2] text-[#505b70]',
+        borderClass: 'border-[#dedfe3]',
+        chipBg: 'bg-[#f3f4f6] text-[#303746]',
+        count: ordinary.length,
+        timings: ordinary,
+      });
+    }
+    if (others.length > 0) {
+      groups.push({
+        key: 'OTHER',
+        label: 'SPECIAL',
+        badgeClass: 'bg-[#f0f2f0] text-[#3f4a42]',
+        borderClass: 'border-[#d9ddd9]',
+        chipBg: 'bg-[#f4f6f4] text-[#27332a]',
+        count: others.length,
+        timings: others,
+      });
+    }
+    return groups;
+  };
+
+  // Loading skeleton state
   if (isLoading && routes.length === 0) {
     return (
       <div className="space-y-6 animate-pulse">
-        <div className="h-10 bg-slate-200/80 rounded-xl w-64" />
-        <div className="h-10 bg-white rounded-xl border border-slate-200" />
+        <div className="h-8 w-48 bg-slate-200/80 rounded-lg" />
+        <div className="h-12 w-64 bg-slate-200/80 rounded-lg" />
+        <div className="h-10 w-full bg-slate-200/80 rounded-full" />
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-44 bg-white rounded-3xl border border-slate-200" />
+            <div key={i} className="h-44 bg-white rounded-xl border border-[#dcdad3] p-5" />
           ))}
         </div>
       </div>
     );
   }
 
-  // Error State with Retry
+  // Error state
   if (error && routes.length === 0) {
     return (
-      <div className="bg-white border border-red-200 rounded-3xl p-8 md:p-12 text-center space-y-4 max-w-xl mx-auto shadow-sm">
+      <div className="bg-white border border-red-200 rounded-2xl p-8 text-center space-y-4 max-w-lg mx-auto shadow-sm">
         <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center mx-auto">
           <AlertCircle className="w-6 h-6" />
         </div>
         <h3 className="text-lg font-serif font-bold text-slate-900">Unable to Load Bus Timetable</h3>
-        <p className="text-sm text-slate-600 leading-relaxed font-sans">{error}</p>
+        <p className="text-xs text-slate-600 leading-relaxed font-sans">{error}</p>
         {onRefresh && (
           <button
             type="button"
-            onClick={() => onRefresh()}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-forest-green text-white text-sm font-semibold rounded-xl hover:bg-forest-green-dark transition-colors cursor-pointer shadow-sm"
+            onClick={handleRefresh}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#173d2a] text-white text-xs font-semibold rounded-lg hover:bg-[#0e2f1e] transition-colors cursor-pointer"
           >
-            <RotateCw className="w-4 h-4" />
+            <RotateCw className="w-3.5 h-3.5" />
             <span>Retry Connection</span>
           </button>
         )}
@@ -295,425 +421,349 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
   }
 
   return (
-    <div className="space-y-5 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn text-[#19211c]">
       {/* =========================================================================
-          SECTION A: CLEAN COMPACT HEADER & INQUIRY PILL
+          1. TOP NAVIGATION BAR (Matching Reference Screenshots)
       ========================================================================== */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200/80">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 tracking-wider uppercase font-sans">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              KSRTC · Chitradurga Division
-            </span>
-            <span className="text-slate-300">·</span>
-            <span className="text-[11px] text-slate-500 font-medium">Pavagada Bus Stand</span>
-          </div>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight flex flex-wrap items-baseline gap-2">
-            <span>Bus &amp; Transport</span>
-            <span className="font-kannada text-sm sm:text-base font-normal text-slate-500">
-              (ಅಧಿಕೃತ ಬಸ್ ವೇಳಾಪಟ್ಟಿ)
-            </span>
-          </h1>
-        </div>
-
-        {/* Action Buttons: Compact Inquiry Call & Refresh */}
-        <div className="flex items-center gap-2 shrink-0">
-          <a
-            href="tel:7760990864"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 rounded-full text-xs font-semibold transition-colors shadow-2xs"
-            title="Call Pavagada Bus Stand Official Inquiry"
-          >
-            <Phone className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Inquiry: <strong className="font-mono">7760990864</strong></span>
-          </a>
-
-          {onRefresh && (
+      {onBackToDirectory && (
+        <nav
+          className="border-b border-[#dedbd3] -mx-4 md:-mx-8 lg:-mx-12 px-5 py-3.5 sm:px-8 lg:px-12 bg-[#fbf9f5]/90 mb-2"
+          aria-label="Category Navigation"
+        >
+          <div className="mx-auto flex max-w-[1440px] items-center justify-between">
             <button
               type="button"
-              onClick={() => onRefresh()}
-              disabled={isRefreshing}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-600 text-xs font-medium rounded-full border border-slate-200 transition-colors shadow-2xs disabled:opacity-50 cursor-pointer"
-              title="Refresh timetable"
+              onClick={onBackToDirectory}
+              className="flex items-center gap-1.5 text-[12px] font-semibold text-[#566159] transition-colors hover:text-[#15241a] cursor-pointer"
             >
-              <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">Refresh</span>
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to All Categories</span>
             </button>
-          )}
-        </div>
-      </div>
+            <p className="hidden text-[10px] font-bold tracking-[0.18em] text-[#8b8f88] uppercase sm:block font-sans">
+              Transit Corridors <span className="px-1 text-[#b2b3ae]">·</span> Pavagada Central Station
+            </p>
+          </div>
+        </nav>
+      )}
 
       {/* =========================================================================
-          SECTION B: COMPACT TOOLBAR (FILTERS + COMPACT SEARCH INPUT)
+          2. PAGE HEADER (Matching Screenshot 3 & 2)
       ========================================================================== */}
-      <div className="space-y-2">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-          {/* Filter Tabs */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-            {[
-              { id: 'ALL' as FilterCategory, label: 'All Buses', count: stats.totalEntries },
-              { id: 'DEPARTING' as FilterCategory, label: 'Departing', count: stats.departingCount },
-              { id: 'PASSING' as FilterCategory, label: 'Passing', count: stats.passingCount },
-              { id: 'EXPRESS' as FilterCategory, label: 'Express', count: stats.expressCount },
-              { id: 'ORDINARY' as FilterCategory, label: 'Ordinary', count: stats.ordinaryCount },
-              { id: 'NON_STOP' as FilterCategory, label: 'Non-Stop', count: stats.nonStopCount },
-            ].map((tab) => {
-              const isActive = activeFilter === tab.id;
+      <header className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
+        <div>
+          {/* Top identification label with status indicator dot */}
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-bold tracking-[0.11em] text-[#657068] uppercase font-sans">
+            <span className="h-2 w-2 rounded-full bg-[#4b8f63] shadow-[0_0_0_3px_#dfece2]" />
+            <span>KSRTC · Chitradurga Division · Pavagada Bus Stand</span>
+          </div>
+
+          {/* Main Title */}
+          <h1 className="font-serif text-[42px] leading-none font-semibold tracking-[-0.035em] text-[#18221b] sm:text-[52px]">
+            Bus &amp; Transport
+          </h1>
+
+          {/* Kannada Subtitle */}
+          <p className="mt-2 text-sm font-medium text-[#777d77] font-kannada">
+            (ಬಸ್ ಮತ್ತು ಸಾರಿಗೆ)
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Official Inquiry Contact */}
+          <a
+            href="tel:08136244888"
+            className="flex h-10 items-center gap-2 rounded-lg border border-[#d3d6d0] bg-white px-4 text-xs font-semibold text-[#334039] shadow-[0_1px_2px_rgba(25,33,28,0.04)] transition hover:border-[#aeb7b0]"
+            title="Call official inquiry desk"
+          >
+            <Phone className="w-3.5 h-3.5 text-[#657068]" />
+            <span>
+              <span className="text-[#777d77] font-normal">Inquiry:</span> 08136 244 888
+            </span>
+          </a>
+
+          {/* Real Refresh Action */}
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex h-10 items-center gap-2 rounded-lg bg-[#173d2a] px-4 text-xs font-semibold text-white transition hover:bg-[#0e2f1e] disabled:opacity-60 cursor-pointer shadow-xs"
+            title="Refresh timetable from live server"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Syncing...' : justRefreshed ? 'Updated' : 'Refresh'}</span>
+          </button>
+        </div>
+      </header>
+
+      {/* =========================================================================
+          3. FILTER TABS & SEARCH BAR (Matching Screenshot 3 & 2)
+      ========================================================================== */}
+      <section aria-label="Bus filters" className="pt-2">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          {/* Horizontally scrollable filter pills */}
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none flex-nowrap">
+            {filterTabs.map(({ label, count }) => {
+              const active = activeFilter === label;
               return (
                 <button
-                  key={tab.id}
                   type="button"
-                  onClick={() => setActiveFilter(tab.id)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-xl transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                    isActive
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-slate-200/80'
+                  key={label}
+                  onClick={() => setActiveFilter(label)}
+                  className={`shrink-0 rounded-full border px-3.5 py-2 text-[11px] font-bold transition cursor-pointer whitespace-nowrap ${
+                    active
+                      ? 'border-[#1e2b23] bg-[#1e2b23] text-white shadow-sm'
+                      : 'border-[#d9d8d2] bg-[#fbfaf7] text-[#606760] hover:border-[#adb2ac]'
                   }`}
                 >
-                  <span>{tab.label}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    {tab.count}
+                  {label}{' '}
+                  <span className={active ? 'text-[#aabbb0]' : 'text-[#9a9d98]'}>
+                    ({count})
                   </span>
                 </button>
               );
             })}
           </div>
 
-          {/* Compact Search Bar */}
-          <div className="relative w-full md:w-64 lg:w-72 shrink-0">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+          {/* Search Bar on Right on Desktop, stacked below on mobile */}
+          <label className="relative block w-full shrink-0 xl:w-[300px]">
+            <span className="absolute top-1/2 left-3.5 -translate-y-1/2 text-[#818780] pointer-events-none">
+              <Search className="w-4 h-4" />
+            </span>
             <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder="Search destination or bus..."
-              className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-slate-200/90 rounded-xl focus:outline-none focus:border-emerald-600 text-slate-900 placeholder:text-slate-400 transition-all font-sans shadow-2xs"
+              className="h-10 w-full rounded-lg border border-[#d7d6d0] bg-white pr-9 pl-10 text-xs text-[#273129] outline-none transition placeholder:text-[#9a9e99] focus:border-[#74887a] focus:ring-2 focus:ring-[#dfe7e0] font-sans"
             />
-            {searchQuery && (
+            {query && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
+                onClick={() => setQuery('')}
+                className="absolute top-1/2 right-3 -translate-y-1/2 text-[#818780] hover:text-[#273129] cursor-pointer"
                 title="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
-          </div>
+          </label>
         </div>
 
-        {/* Departure count readout */}
-        <div className="flex items-center justify-between text-[11px] text-slate-500 px-0.5">
-          <span>
-            Showing <strong className="text-slate-800 font-semibold">{totalFilteredTimingsCount}</strong> departures across{' '}
-            <strong className="text-slate-800 font-semibold">{filteredRoutes.length}</strong> routes
-          </span>
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="text-emerald-700 hover:underline text-[11px]"
-            >
-              Clear filter
-            </button>
-          )}
-        </div>
-      </div>
+        {/* Results Summary */}
+        <p className="mt-2.5 text-[11px] text-[#828680] font-sans">
+          Showing{' '}
+          <strong className="font-semibold text-[#4f5751]">
+            {filteredDeparturesCount} departures
+          </strong>{' '}
+          across {filteredRoutes.length} routes
+          {query && <span> matching “{query}”</span>}
+        </p>
+      </section>
 
       {/* =========================================================================
-          SECTION D & E: CORRIDOR CARDS WITH EXPANDABLE SCHEDULED DEPARTURES
+          4. BUS ROUTE CARDS (Matching Screenshot 1, 2, 3)
       ========================================================================== */}
       {filteredRoutes.length === 0 ? (
-        <div className="bg-white border border-slate-200/80 rounded-3xl p-10 md:p-14 text-center space-y-4 shadow-xs">
-          <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
-            <Bus className="w-6 h-6" />
-          </div>
-          <h3 className="text-lg font-serif font-bold text-slate-900">
-            {routes.length === 0 ? 'No Timetable Records Available Yet' : 'No Buses Match Your Search'}
-          </h3>
-          <p className="text-xs md:text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-            {routes.length === 0
-              ? 'Bus timetable records are being synchronized with the Chitradurga Division database.'
-              : `No bus services matched "${searchQuery}" under the "${activeFilter}" filter.`}
+        <div className="rounded-xl border border-[#dcdad3] bg-white p-10 text-center space-y-3 shadow-xs">
+          <h3 className="text-base font-serif font-bold text-[#162019]">No bus routes found</h3>
+          <p className="text-xs text-[#727a73] max-w-md mx-auto leading-relaxed">
+            Try a different destination or filter.
           </p>
-          {(activeFilter !== 'ALL' || searchQuery) && (
+          {(activeFilter !== 'All Buses' || query) && (
             <button
               type="button"
               onClick={() => {
-                setActiveFilter('ALL');
-                setSearchQuery('');
+                setActiveFilter('All Buses');
+                setQuery('');
               }}
-              className="px-4 py-2 bg-slate-900 text-white text-xs font-semibold rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+              className="px-4 py-2 bg-[#1e2b23] text-white text-xs font-semibold rounded-lg hover:bg-[#15241a] transition-colors cursor-pointer"
             >
               Reset Filters
             </button>
           )}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {filteredRoutes.map((route) => {
-            const isTimingsExpanded = expandedRouteTimings[route.id] ?? true;
-            const timings = route.matchedTimings || [];
-            const isPassingThrough =
+            const isPassing =
               route.routeClassification === 'PASSING_THROUGH' ||
-              route.source.toLowerCase() !== 'pavagada';
+              !route.source.toLowerCase().includes('pavagada');
 
-            // Clean origin and destination display
-            const originTitle = cleanStationTitle(route.source);
-            const destinationTitle = cleanStationTitle(route.destination);
-            const viaText = route.via && route.via.length > 0 ? route.via.join(', ') : '';
-
-            // Unique service classes operating on this route
-            const routeClasses = Array.from(
-              new Set(
-                timings
-                  .map((t) => t.serviceClass || t.busType)
-                  .filter((c): c is string => Boolean(c))
-              )
-            );
+            const originDisplay = cleanStationTitle(route.source) || route.source;
+            const destinationDisplay = cleanStationTitle(route.destination) || route.destination;
+            const viaDisplay = getViaDisplay(route);
+            const primaryServiceType = getPrimaryServiceType(route);
+            const timings = route.timings || [];
+            const isExpanded = expandedRoutes[route.id] ?? false;
+            const groupedTimings = groupRouteTimings(timings);
+            const totalBuses = timings.length;
 
             return (
-              <div
+              <article
                 key={route.id}
-                className="bg-white border border-slate-200/80 rounded-3xl p-5 md:p-7 shadow-xs hover:border-slate-300 transition-all space-y-5"
+                className="overflow-hidden rounded-xl border border-[#dcdad3] bg-white shadow-[0_8px_28px_rgba(31,42,34,0.045)] transition-all hover:border-[#c8c6be]"
               >
-                {/* 1. Corridor Header with Badges, Title, and Right Summary Panel */}
-                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                  <div className="space-y-2.5">
-                    {/* Badge Row */}
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
+                {/* Route Header Row */}
+                <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    {/* Badges Row */}
+                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                      {/* Operator Badge */}
+                      <span className="rounded bg-[#e2eee6] px-2 py-1 text-[9px] font-extrabold tracking-[0.08em] text-[#26543a] uppercase">
                         {route.operator || 'KSRTC'}
                       </span>
 
-                      {/* Route Classification Badge */}
-                      {isPassingThrough ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider bg-amber-50 text-amber-800 border border-amber-300 flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-amber-600" />
-                          <span>PASSING THROUGH PAVAGADA</span>
+                      {/* Origin Classification Badge */}
+                      {isPassing ? (
+                        <span className="rounded bg-[#fff0cd] px-2 py-1 text-[9px] font-extrabold tracking-[0.07em] text-[#875a04] uppercase">
+                          PASSING THROUGH PAVAGADA
                         </span>
                       ) : (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider bg-sky-50 text-sky-800 border border-sky-200">
-                          DEPARTING PAVAGADA
+                        <span className="rounded bg-[#e2eee6] px-2 py-1 text-[9px] font-extrabold tracking-[0.07em] text-[#26543a] uppercase">
+                          DEPARTING FROM PAVAGADA
                         </span>
                       )}
 
-                      {/* Service Classes on this Route */}
-                      {routeClasses.map((cls) => (
-                        <span
-                          key={cls}
-                          className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200"
-                        >
-                          {cls}
-                        </span>
-                      ))}
+                      {/* Service Type Badge */}
+                      <span className="rounded border border-[#d9ddd9] px-2 py-1 text-[9px] font-bold tracking-[0.07em] text-[#566158] uppercase">
+                        {primaryServiceType}
+                      </span>
 
-                      <span className="text-xs font-mono font-medium text-slate-400">
+                      {/* Route Code */}
+                      <span className="ml-0.5 font-mono text-[10px] font-semibold text-[#8a8e89]">
                         {route.routeCode}
                       </span>
                     </div>
 
-                    {/* Origin -> Destination Title */}
-                    <div className="flex flex-wrap items-center text-xl md:text-2xl font-bold text-slate-900 tracking-tight font-sans">
-                      <span>{originTitle}</span>
-                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-400 text-xs mx-2 select-none font-bold">
-                        →
-                      </span>
-                      <span>{destinationTitle}</span>
+                    {/* Route Heading + Via */}
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+                      <h2 className="text-xl leading-tight font-bold tracking-[-0.025em] text-[#162019] sm:text-2xl font-sans">
+                        {originDisplay}{' '}
+                        <span className="px-1 font-normal text-[#9aa19b]">→</span>{' '}
+                        {destinationDisplay}
+                        {/* Mobile bus count pill */}
+                        <span className="ml-2 inline-flex -translate-y-0.5 rounded-full bg-[#e4eee7] px-2 py-1 align-middle text-[9px] leading-none font-bold tracking-normal text-[#326145] sm:hidden">
+                          {totalBuses} bus{totalBuses !== 1 ? 'es' : ''}
+                        </span>
+                      </h2>
+                      <p className="text-[11px] font-medium text-[#727a73] font-sans">
+                        Via: {viaDisplay}
+                      </p>
                     </div>
-
-                    {/* Via Location if recorded */}
-                    {viaText && (
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Via: <strong className="text-slate-700">{viaText}</strong></span>
-                      </div>
-                    )}
                   </div>
 
-                  {/* Right Summary Badge: Trip Count */}
-                  <div className="bg-slate-50 border border-slate-200/80 rounded-2xl px-4 py-2.5 flex items-center gap-4 shrink-0 self-start">
+                  {/* Scheduled Departures Summary Panel (Desktop Right) */}
+                  <div className="hidden shrink-0 items-center gap-4 rounded-lg border border-[#e4e3dd] bg-[#faf9f6] px-4 py-2.5 sm:flex lg:text-right">
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
-                        SCHEDULED DEPARTURES
-                      </span>
-                      <span className="text-sm font-bold text-slate-900 font-sans">
-                        {timings.length} {timings.length === 1 ? 'service' : 'services'}
-                      </span>
+                      <p className="text-[9px] font-bold tracking-[0.1em] text-[#8b908a] uppercase font-sans">
+                        Scheduled departures
+                      </p>
+                      <p className="mt-0.5 text-sm font-bold text-[#26342b] font-sans">
+                        {totalBuses} service{totalBuses !== 1 ? 's' : ''}
+                      </p>
                     </div>
+                    <div className="h-8 w-px bg-[#deded8]" />
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#e4eee7] text-[#326145]">
+                      <Clock className="w-3.5 h-3.5" />
+                    </span>
                   </div>
                 </div>
 
-                {/* 2. Passing Through Transparency Warning */}
-                {isPassingThrough && (
-                  <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 text-xs text-amber-900 flex items-start gap-2.5">
-                    <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                    <p className="leading-relaxed">
-                      <strong>Passing-Through Notice:</strong> This bus originates at <strong className="text-amber-950">{originTitle}</strong> and passes through Pavagada Bus Stand en route to <strong className="text-amber-950">{destinationTitle}</strong>.
-                      The printed timetable time reflects the origin departure; arrival/departure at Pavagada Bus Stand may vary and requires local confirmation.
-                    </p>
-                  </div>
-                )}
-
-                {/* 3. Expandable Scheduled Departures Section */}
-                <div className="border-t border-slate-100 pt-4">
+                {/* =========================================================================
+                    5. TIMETABLE EXPANSION ROW & BODY (Matching Screenshot 1)
+                ========================================================================== */}
+                <section className="border-t border-[#ebe9e3]">
+                  {/* Collapsible Trigger Row */}
                   <button
                     type="button"
-                    onClick={() => toggleTimings(route.id)}
-                    className="w-full flex items-center justify-between group cursor-pointer focus:outline-none py-1"
-                    aria-expanded={isTimingsExpanded}
+                    onClick={() => toggleTimetable(route.id)}
+                    aria-expanded={isExpanded}
+                    className="flex w-full items-center justify-between px-5 py-3 text-left transition-colors hover:bg-[#faf9f6] cursor-pointer"
                   >
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-full border border-emerald-500/80 flex items-center justify-center text-emerald-600">
-                        <Clock className="w-3 h-3 stroke-[2.5]" />
-                      </div>
-                      <span className="text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition-colors">
-                        Timetable Departures
+                    <span className="flex items-center gap-2 text-xs font-bold text-[#313e35] font-sans">
+                      <span className="text-[#66806e]">
+                        <Clock className="w-3.5 h-3.5" />
                       </span>
-                      <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/60">
-                        {timings.length}
+                      <span>Timetable Departures</span>
+                      <span className="rounded bg-[#edf0ec] px-1.5 py-0.5 text-[9px] text-[#667068] font-mono">
+                        {totalBuses}
                       </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 text-xs text-slate-400 group-hover:text-slate-700 transition-colors">
-                      <span>{isTimingsExpanded ? 'Hide' : 'Show'} timetable</span>
-                      <ChevronDown
-                        className={`w-4 h-4 transition-transform duration-200 ${
-                          isTimingsExpanded ? 'rotate-180' : ''
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] font-semibold text-[#777e78] font-sans">
+                      <span>{isExpanded ? 'Hide timetable' : 'Show timetable'}</span>
+                      <span
+                        className={`text-base leading-none transition-transform duration-200 ${
+                          isExpanded ? '' : 'rotate-180'
                         }`}
-                      />
-                    </div>
+                      >
+                        ⌃
+                      </span>
+                    </span>
                   </button>
 
-                  {/* Departures Grid/Table */}
-                  {isTimingsExpanded && (
-                    <div className="mt-3 pt-1 animate-fadeIn">
-                      {timings.length > 0 ? (
-                        <div className="divide-y divide-slate-100 border-t border-slate-100">
-                          {timings.map((timing) => {
-                            const isPassingRow =
-                              timing.routeClassification === 'PASSING_THROUGH' ||
-                              (timing.sourceOrigin && timing.sourceOrigin.toLowerCase() !== 'pavagada');
-                            const sClass = timing.serviceClass || timing.busType || 'Ordinary';
-
-                            return (
-                              <div
-                                key={timing.id || timing.serialNumber}
-                                className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-50/80 px-3 rounded-xl transition-colors"
-                              >
-                                {/* Left: Serial Number & Departure Time */}
-                                <div className="flex items-center gap-3 min-w-[200px]">
-                                  {timing.serialNumber && (
-                                    <span
-                                      className="text-[10px] font-mono font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200"
-                                      title={`Official Timetable Serial Number #${timing.serialNumber}`}
-                                    >
-                                      SL #{timing.serialNumber}
-                                    </span>
-                                  )}
-
-                                  <div className="flex items-baseline gap-1.5">
-                                    <span className="text-lg font-bold text-slate-900 font-mono tracking-tight">
-                                      {timing.departureTime}
-                                    </span>
-                                    {isPassingRow && (
-                                      <span className="text-[10px] text-amber-700 bg-amber-100/70 px-1.5 py-0.5 rounded font-medium">
-                                        Origin Time
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Middle: Service Class Badge & Route details */}
-                                <div className="flex-1 sm:px-2">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    {/* Service Class Badge */}
-                                    <span
-                                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                                        sClass.toLowerCase().includes('non-stop')
-                                          ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                                          : sClass.toLowerCase().includes('express')
-                                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                          : 'bg-slate-100 text-slate-700 border border-slate-200'
-                                      }`}
-                                    >
-                                      {sClass}
-                                    </span>
-
-                                    {/* Via place */}
-                                    {timing.viaPlace && (
-                                      <span className="text-xs text-slate-600 font-medium flex items-center gap-1">
-                                        <span>via {timing.viaPlace}</span>
-                                      </span>
-                                    )}
-
-                                    {/* Origin & Destination if passing through */}
-                                    {isPassingRow && timing.sourceOrigin && (
-                                      <span className="text-[11px] text-slate-500 font-sans italic">
-                                        ({timing.sourceOrigin} → {timing.sourceDestination})
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Right: Provenance Tag & Days */}
-                                <div className="flex items-center gap-3 text-left sm:text-right shrink-0">
-                                  <span className="text-[11px] text-slate-400 font-mono" title="Source document page">
-                                    Page {timing.sourcePage || 1}
-                                  </span>
-
-                                  <span className="text-xs font-medium text-slate-600 font-sans bg-slate-100 px-2 py-0.5 rounded">
-                                    {formatOperatingDays(timing.dayType)}
-                                  </span>
-                                </div>
+                  {/* Expanded Timetable Grid with Service Type Groups */}
+                  {isExpanded && (
+                    <div className="border-t border-[#efeee9] bg-[#fcfbf8] px-5 animate-fadeIn">
+                      {groupedTimings.length > 0 ? (
+                        <div className="grid gap-2.5 py-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {groupedTimings.map((group) => (
+                            <div
+                              key={group.key}
+                              className={`rounded-lg border ${group.borderClass} bg-white p-3 shadow-2xs`}
+                            >
+                              {/* Group Header */}
+                              <div className="mb-2.5 flex items-center justify-between">
+                                <span
+                                  className={`rounded ${group.badgeClass} px-2 py-1 text-[9px] font-extrabold tracking-[0.08em] uppercase`}
+                                >
+                                  {group.label}
+                                </span>
+                                <span className="text-[9px] font-semibold text-[#969b96]">
+                                  {group.count} bus{group.count !== 1 ? 'es' : ''}
+                                </span>
                               </div>
-                            );
-                          })}
+
+                              {/* Departure Time Chips */}
+                              <div className="flex flex-wrap gap-1.5">
+                                {group.timings.map((timing) => (
+                                  <span
+                                    key={timing.id}
+                                    className={`rounded-md ${group.chipBg} px-2.5 py-1.5 text-xs font-bold font-sans tracking-tight`}
+                                    title={timing.remarks || `${group.label} departure from Pavagada`}
+                                  >
+                                    {timing.departureTime}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : (
-                        <div className="p-4 mt-2 rounded-2xl bg-slate-50 border border-slate-200/60 text-xs text-slate-500 italic text-center">
-                          No scheduled departures match the active search or filter.
+                        <div className="py-4 text-center text-xs text-[#8a8e89] italic">
+                          Timetable departures currently unavailable or pending administrative publication.
                         </div>
                       )}
+
+                      {/* Footer with Report Timing action */}
+                      <footer className="flex justify-end border-t border-[#ebe9e3] py-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleReportTiming(route)}
+                          className="flex items-center gap-1.5 text-[10px] font-semibold text-[#878b87] transition hover:text-[#704f43] cursor-pointer"
+                        >
+                          <Flag className="w-3 h-3" />
+                          <span>Report incorrect timing</span>
+                        </button>
+                      </footer>
                     </div>
                   )}
-                </div>
-
-                {/* 4. Contextual Issue Report Link */}
-                <div className="pt-2 flex items-center justify-end border-t border-slate-50">
-                  <button
-                    type="button"
-                    onClick={() => openFeedback({
-                      category: 'INCORRECT_INFO',
-                      relatedEntityType: 'BUS_ROUTE',
-                      relatedEntityId: route.id,
-                      relatedEntityName: `${originTitle} → ${destinationTitle} (${route.routeCode})`,
-                      defaultMessage: `I noticed incorrect bus timing or stop info on the route ${originTitle} to ${destinationTitle}: `,
-                    })}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 hover:text-terracotta transition-colors px-2 py-1 rounded-lg hover:bg-slate-50 cursor-pointer"
-                    title="Report outdated bus timing or missing stop on this route"
-                  >
-                    <Flag className="w-3.5 h-3.5" />
-                    <span>Report incorrect timing</span>
-                  </button>
-                </div>
-              </div>
+                </section>
+              </article>
             );
           })}
         </div>
       )}
-
-      {/* Subtle bottom citation */}
-      <div className="pt-6 pb-2 text-center text-xs text-slate-400 border-t border-slate-200/60 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-        <span>Source: Pavagada Bus Stand Official Timetable · Chitradurga Division</span>
-        <span>·</span>
-        <a href="tel:7760990864" className="hover:text-slate-600 transition-colors">
-          Helpdesk / Inquiry: 7760990864
-        </a>
-      </div>
     </div>
   );
 };
