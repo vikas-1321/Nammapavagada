@@ -21,7 +21,11 @@ import {
   GraduationCap,
   Building2,
   MapPin,
+  Store,
 } from 'lucide-react';
+
+// Business submission Google Form URL (configured via VITE_BUSINESS_SUBMISSION_FORM_URL)
+const BUSINESS_FORM_URL = import.meta.env.VITE_BUSINESS_SUBMISSION_FORM_URL || '';
 
 export interface LocationsPageProps {
   onRouteChange: (route: PageRoute) => void;
@@ -324,6 +328,43 @@ export const LocationsPage: React.FC<LocationsPageProps> = ({ onRouteChange }) =
             )}
           </div>
         </div>
+      </div>
+
+      {/* =====================================================================
+          Add Your Business — Community Submission CTA Banner
+          Opens Google Form in a new tab. Uses VITE_BUSINESS_SUBMISSION_FORM_URL.
+          If the env var is not set, the button is shown but disabled.
+      ===================================================================== */}
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-warm-cream/50 px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-forest-green/10 text-forest-green">
+            <Store className="w-4.5 h-4.5" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-dark-text leading-snug">
+              Own a local shop or provide a service?
+            </p>
+            <p className="text-xs text-muted-text mt-0.5">
+              Help people in Pavagada discover your business.
+            </p>
+          </div>
+        </div>
+        <a
+          href={BUSINESS_FORM_URL || undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-disabled={!BUSINESS_FORM_URL}
+          title={BUSINESS_FORM_URL ? 'Add your business to Namma Pavagada' : 'Form URL not configured yet — coming soon'}
+          onClick={!BUSINESS_FORM_URL ? (e) => e.preventDefault() : undefined}
+          className={`inline-flex items-center gap-2 shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold shadow-xs transition-all ${
+            BUSINESS_FORM_URL
+              ? 'bg-forest-green text-white hover:bg-forest-green/90 cursor-pointer'
+              : 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-70'
+          }`}
+        >
+          <Store className="w-4 h-4" aria-hidden="true" />
+          <span>+ Add Your Business</span>
+        </a>
       </div>
 
       {/* Location Cards Grid */}
