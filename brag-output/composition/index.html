@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Namma Pavagada — Launch Video</title>
+
+  <!-- Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..800;1,6..72,400..700&family=Noto+Sans+Kannada:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --forest-green: #14271F;
+      --forest-green-mid: #1F3A2E;
+      --forest-green-light: #2D5242;
+      --terracotta: #C65D3A;
+      --terracotta-light: #E07A58;
+      --solar-gold: #F59E0B;
+      --warm-cream: #F7F3EA;
+      --soft-sand: #E8DDCC;
+      --dark-text: #1C1C1C;
+      --font-serif: 'Newsreader', Georgia, serif;
+      --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-kannada: 'Noto Sans Kannada', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: #0D1914;
+      color: #FFFFFF;
+      font-family: var(--font-sans);
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    #root {
+      position: relative;
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: var(--forest-green);
+    }
+
+    .clip {
+      position: absolute;
+      inset: 0;
+      width: 1920px;
+      height: 1080px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .bg-photo {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      filter: brightness(0.68) contrast(1.1);
+      transform: scale(1.05);
+    }
+
+    .vignette-overlay {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 50%, rgba(20, 39, 31, 0.4) 0%, rgba(13, 25, 20, 0.95) 100%),
+                  linear-gradient(180deg, rgba(20, 39, 31, 0.8) 0%, rgba(20, 39, 31, 0.92) 100%);
+    }
+
+    .topo-grid {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(rgba(232, 221, 204, 0.04) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(232, 221, 204, 0.04) 1px, transparent 1px);
+      background-size: 80px 80px;
+      opacity: 0.6;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 24px;
+      border-radius: 9999px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      backdrop-filter: blur(8px);
+    }
+
+    .badge-terracotta {
+      background: rgba(198, 93, 58, 0.22);
+      border: 1px solid rgba(198, 93, 58, 0.55);
+      color: #FFA585;
+    }
+
+    .badge-solar {
+      background: rgba(245, 158, 11, 0.22);
+      border: 1px solid rgba(245, 158, 11, 0.6);
+      color: #FDE047;
+    }
+
+    .badge-forest {
+      background: rgba(45, 82, 66, 0.5);
+      border: 1px solid rgba(232, 221, 204, 0.35);
+      color: #E8DDCC;
+    }
+
+    .dot-pulse {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--terracotta-light);
+      box-shadow: 0 0 14px var(--terracotta);
+    }
+
+    /* Scene 1: Hero Elements */
+    #scene-1 {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 0 140px;
+    }
+
+    .hero-pretitle {
+      font-family: var(--font-mono);
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      color: #FFA585;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .hero-title {
+      font-family: var(--font-serif);
+      font-size: 118px;
+      font-weight: 800;
+      line-height: 0.92;
+      letter-spacing: -0.02em;
+      color: #F7F3EA;
+      margin-bottom: 24px;
+      text-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .hero-title .accent {
+      color: var(--terracotta-light);
+      font-style: italic;
+    }
+
+    .hero-subtitle {
+      font-family: var(--font-serif);
+      font-size: 44px;
+      font-style: italic;
+      color: #E8DDCC;
+      margin-bottom: 36px;
+    }
+
+    .hero-footer-bar {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      font-family: var(--font-mono);
+      font-size: 28px;
+      color: #E8DDCC;
+      background: rgba(20, 39, 31, 0.85);
+      padding: 14px 34px;
+      border-radius: 16px;
+      border: 1px solid rgba(232, 221, 204, 0.25);
+    }
+
+    /* Scene 2: The Two Monuments */
+    #scene-2 {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 70px 100px;
+    }
+
+    .scene-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .cards-duo {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 50px;
+      max-width: 1720px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .monument-card {
+      position: relative;
+      background: rgba(20, 39, 31, 0.92);
+      border-radius: 28px;
+      padding: 44px;
+      overflow: hidden;
+      border: 1px solid rgba(232, 221, 204, 0.2);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+
+    .monument-card.card-fort {
+      border-top: 5px solid var(--terracotta);
+    }
+
+    .monument-card.card-solar {
+      border-top: 5px solid var(--solar-gold);
+    }
+
+    .card-metric {
+      font-family: var(--font-serif);
+      font-size: 80px;
+      font-weight: 800;
+      line-height: 1;
+      margin: 16px 0 10px 0;
+    }
+
+    .card-metric.text-terracotta {
+      color: #FFA585;
+    }
+
+    .card-metric.text-solar {
+      color: #FDE047;
+    }
+
+    .card-label {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: #FFFFFF;
+      margin-bottom: 14px;
+    }
+
+    .card-body {
+      font-size: 28px;
+      line-height: 1.45;
+      color: #E8DDCC;
+    }
+
+    .card-image-preview {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 220px;
+      height: 220px;
+      border-radius: 24px 0 0 0;
+      opacity: 0.25;
+      object-fit: cover;
+      filter: grayscale(0.5);
+    }
+
+    /* Scene 3: Three Pillars */
+    #scene-3 {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 70px 90px;
+    }
+
+    .pillars-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 36px;
+      margin-top: 36px;
+    }
+
+    .pillar-card {
+      background: rgba(20, 39, 31, 0.94);
+      border: 1px solid rgba(232, 221, 204, 0.18);
+      border-radius: 24px;
+      padding: 38px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      height: 500px;
+    }
+
+    .pillar-icon-box {
+      width: 70px;
+      height: 70px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin-bottom: 20px;
+    }
+
+    .icon-heritage {
+      background: rgba(198, 93, 58, 0.25);
+      color: #FFA585;
+      border: 1px solid rgba(198, 93, 58, 0.5);
+    }
+
+    .icon-explorer {
+      background: rgba(245, 158, 11, 0.25);
+      color: #FDE047;
+      border: 1px solid rgba(245, 158, 11, 0.5);
+    }
+
+    .icon-community {
+      background: rgba(45, 82, 66, 0.55);
+      color: #A7F3D0;
+      border: 1px solid rgba(167, 243, 208, 0.5);
+    }
+
+    .pillar-title {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+      color: #FFFFFF;
+    }
+
+    .pillar-kannada {
+      font-family: var(--font-kannada);
+      font-size: 28px;
+      color: #FFA585;
+      margin-bottom: 16px;
+    }
+
+    .pillar-bullets {
+      list-style: none;
+      font-size: 28px;
+      color: #E8DDCC;
+      line-height: 1.5;
+    }
+
+    .pillar-bullets li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .pillar-bullets li::before {
+      content: "•";
+      color: var(--terracotta-light);
+      font-size: 26px;
+    }
+
+    .simulated-cursor {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      pointer-events: none;
+      z-index: 100;
+      opacity: 0;
+    }
+
+    /* Scene 4: Outro Seal */
+    #scene-4 {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 0 100px;
+    }
+
+    .seal-box {
+      background: rgba(20, 39, 31, 0.96);
+      border: 2px solid rgba(245, 158, 11, 0.5);
+      border-radius: 36px;
+      padding: 60px 96px;
+      box-shadow: 0 0 100px rgba(198, 93, 58, 0.25), 0 25px 60px rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 1120px;
+    }
+
+    .seal-top {
+      font-family: var(--font-mono);
+      font-size: 28px;
+      letter-spacing: 0.25em;
+      color: #FDE047;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+
+    .seal-brand {
+      font-family: var(--font-serif);
+      font-size: 100px;
+      font-weight: 800;
+      color: #FFFFFF;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+      text-shadow: 0 4px 25px rgba(0,0,0,0.5);
+    }
+
+    .seal-kannada {
+      font-family: var(--font-kannada);
+      font-size: 40px;
+      font-weight: 700;
+      color: #FFA585;
+      margin-bottom: 22px;
+    }
+
+    .seal-triad {
+      font-family: var(--font-serif);
+      font-size: 38px;
+      font-style: italic;
+      color: #E8DDCC;
+      margin-bottom: 36px;
+    }
+
+    .seal-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 16px;
+      background: linear-gradient(135deg, #C65D3A 0%, #A84C2C 100%);
+      color: #FFFFFF;
+      padding: 22px 52px;
+      border-radius: 9999px;
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      box-shadow: 0 10px 30px rgba(198, 93, 58, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="root" data-width="1920" data-height="1080" data-duration="24.5">
+
+    <!-- Background Layer -->
+    <img src="assets/images/hero-pavagada-betta.jpg" alt="Pavagada Betta" class="bg-photo" id="bg-hero">
+    <div class="vignette-overlay"></div>
+    <div class="topo-grid"></div>
+
+    <!-- ================= SCENE 1: HOOK (0.0s - 5.5s) ================= -->
+    <div id="scene-1" class="clip" data-start="0" data-duration="5.5" data-hold>
+      <div class="badge badge-terracotta" id="s1-badge" style="margin-bottom: 28px;">
+        <span class="dot-pulse"></span>
+        <span>Heritage · Explorer · Community</span>
+      </div>
+
+      <div class="hero-pretitle" id="s1-pretitle">Pavagada Taluk · Tumakuru District</div>
+
+      <h1 class="hero-title" id="s1-title">
+        DISCOVER <span class="accent">PAVAGADA</span>
+      </h1>
+
+      <p class="hero-subtitle" id="s1-subtitle">
+        Its stories. Its places. Its people.
+      </p>
+
+      <div class="hero-footer-bar" id="s1-footer">
+        <span>📍 14.10° N, 77.28° E</span>
+        <span>•</span>
+        <span>Elevation: 846m</span>
+        <span>•</span>
+        <span>158 km to Bengaluru</span>
+      </div>
+    </div>
+
+    <!-- ================= SCENE 2: THE TWO MONUMENTS (5.5s - 11.2s) ================= -->
+    <div id="scene-2" class="clip" data-start="5.5" data-duration="5.7">
+      <div class="scene-header" id="s2-header">
+        <div class="badge badge-solar" style="margin-bottom: 14px;">
+          <span>Taluk Milestones</span>
+        </div>
+        <h2 style="font-family: var(--font-serif); font-size: 64px; font-weight: 800;">
+          Ancient Stone Meets Modern Clean Energy
+        </h2>
+      </div>
+
+      <div class="cards-duo">
+        <!-- Fort Citadel Card -->
+        <div class="monument-card card-fort" id="card-fort">
+          <div class="badge badge-terracotta">1586 CE · Historic Citadel</div>
+          <div class="card-metric text-terracotta">7 RINGS</div>
+          <div class="card-label">Stone Fort Enclosures</div>
+          <div class="card-body">
+            Five rings crown the 846m granite peak. Two fortified walls guard the town below.
+          </div>
+          <img src="assets/images/timeline-fort-citadel.jpg" class="card-image-preview" alt="Fort Citadel" data-layout-allow-overflow>
+        </div>
+
+        <!-- Solar Park Card -->
+        <div class="monument-card card-solar" id="card-solar">
+          <div class="badge badge-solar">Clean Energy Corridor</div>
+          <div class="card-metric text-solar">2,050 MW</div>
+          <div class="card-label">Shakti Sthala Solar Park</div>
+          <div class="card-body">
+            World’s 3rd largest solar corridor, spanning 13,000 acres across five villages.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= SCENE 3: THREE PILLARS (11.2s - 18.2s) ================= -->
+    <div id="scene-3" class="clip" data-start="11.2" data-duration="7.0">
+      <div class="scene-header" id="s3-header">
+        <div class="badge badge-forest" style="margin-bottom: 14px;">
+          <span>Digital Community Hub</span>
+        </div>
+        <h2 style="font-family: var(--font-serif); font-size: 60px; font-weight: 800;">
+          Everything You Need in One Modern Portal
+        </h2>
+      </div>
+
+      <div class="pillars-grid">
+        <!-- Pillar 1: Heritage -->
+        <div class="pillar-card" id="pillar-heritage">
+          <div>
+            <div class="pillar-icon-box icon-heritage">🏛️</div>
+            <div class="pillar-title">HERITAGE</div>
+            <div class="pillar-kannada">ಐತಿಹಾಸಿಕ ಪರಂಪರೆ</div>
+            <ul class="pillar-bullets">
+              <li>1586 CE Hill Fortifications</li>
+              <li>1000 BCE Megalithic Cists</li>
+              <li>Bodula Maramma Temple</li>
+            </ul>
+          </div>
+          <div class="badge badge-terracotta" style="align-self: flex-start;">Explore History →</div>
+        </div>
+
+        <!-- Pillar 2: Explorer -->
+        <div class="pillar-card" id="pillar-explorer">
+          <div>
+            <div class="pillar-icon-box icon-explorer">🧭</div>
+            <div class="pillar-title">EXPLORER</div>
+            <div class="pillar-kannada">ಸ್ಥಳಗಳ ಪರಿಶೋಧನೆ</div>
+            <ul class="pillar-bullets">
+              <li>Interactive Spatial Map</li>
+              <li>Shakti Sthala Solar Views</li>
+              <li>Pavagada Betta Treks</li>
+            </ul>
+          </div>
+          <div class="badge badge-solar" style="align-self: flex-start;" id="btn-explore-map">Interactive Map →</div>
+        </div>
+
+        <!-- Pillar 3: Community -->
+        <div class="pillar-card" id="pillar-community">
+          <div>
+            <div class="pillar-icon-box icon-community">🏥</div>
+            <div class="pillar-title">COMMUNITY</div>
+            <div class="pillar-kannada">ನಾಗರಿಕ ಸೇವೆಗಳು</div>
+            <ul class="pillar-bullets">
+              <li>KSRTC Bus Timetables</li>
+              <li>Govt Hospitals & PHCs</li>
+              <li>Emergency 112 Help</li>
+            </ul>
+          </div>
+          <div class="badge badge-forest" style="align-self: flex-start;">Civic Services →</div>
+        </div>
+      </div>
+
+      <!-- Simulated Pointer Cursor -->
+      <svg id="cursor" class="simulated-cursor" viewBox="0 0 24 24" fill="none">
+        <path d="M5.5 3.21V20.8c0 .45.54.67.85.35l4.86-4.86a.5.5 0 0 1 .35-.15h6.87a.5.5 0 0 0 .35-.85L6.35 2.85a.5.5 0 0 0-.85.36z" fill="#FFA585" stroke="#FFFFFF" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <!-- ================= SCENE 4: OUTRO (18.2s - 24.5s) ================= -->
+    <div id="scene-4" class="clip" data-start="18.2" data-duration="6.3" data-hold>
+      <div class="seal-box" id="seal-box">
+        <div class="seal-top">Official Taluk Portal</div>
+        <div class="seal-brand" id="seal-brand">NAMMA PAVAGADA</div>
+        <div class="seal-kannada" id="seal-kannada">ನಮ್ಮ ಪಾವಗಡ</div>
+        <div class="seal-triad" id="seal-triad">Its stories. Its places. Its people.</div>
+
+        <div class="seal-cta" id="seal-cta">
+          <span>nammapavagada.in</span>
+          <span style="font-size: 34px;">↗</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= AUDIO TRACKS ================= -->
+    <!-- Voiceover Track -->
+    <audio id="vo" data-start="0.3" data-duration="23.9" data-track-index="3" data-volume="1" src="assets/voiceover.wav"></audio>
+
+    <!-- Music Bed -->
+    <audio id="bg-music" data-start="0" data-duration="24.5" data-track-index="10" data-volume="0.28" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"></audio>
+
+    <!-- Sound Effects -->
+    <audio id="sfx-drop-1" data-start="5.7" data-duration="0.11" data-track-index="11" data-volume="0.65" src="assets/sfx/interface/drop_001.ogg"></audio>
+    <audio id="sfx-drop-2" data-start="7.2" data-duration="0.11" data-track-index="12" data-volume="0.65" src="assets/sfx/interface/drop_001.ogg"></audio>
+    <audio id="sfx-drop-3" data-start="11.5" data-duration="0.11" data-track-index="13" data-volume="0.65" src="assets/sfx/interface/drop_001.ogg"></audio>
+    <audio id="sfx-drop-4" data-start="12.3" data-duration="0.11" data-track-index="14" data-volume="0.65" src="assets/sfx/interface/drop_001.ogg"></audio>
+    <audio id="sfx-drop-5" data-start="13.11" data-duration="0.11" data-track-index="15" data-volume="0.70" src="assets/sfx/interface/drop_001.ogg"></audio>
+    <audio id="sfx-click" data-start="15.2" data-duration="0.06" data-track-index="16" data-volume="0.75" src="assets/sfx/ui/mouseclick1.ogg"></audio>
+    <audio id="sfx-bell" data-start="18.56" data-duration="1.48" data-track-index="17" data-volume="0.85" src="assets/sfx/impact/impactBell_heavy_000.ogg"></audio>
+
+  </div>
+
+  <!-- GSAP Animation Engine -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+
+    // Scene 1 (0.0s - 5.5s)
+    tl.to("#scene-1", { opacity: 1, duration: 0.4 }, 0.0);
+    tl.fromTo("#s1-badge", { y: -20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 0.2);
+    tl.fromTo("#s1-pretitle", { y: -15, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 0.4);
+    tl.fromTo("#s1-title", { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, ease: "power3.out" }, 0.6);
+    tl.fromTo("#s1-subtitle", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power2.out" }, 1.0);
+    tl.fromTo("#s1-footer", { y: 25, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power2.out" }, 1.4);
+    tl.to("#bg-hero", { scale: 1.12, duration: 5.5, ease: "none" }, 0.0);
+    tl.to("#scene-1", { opacity: 0, duration: 0.4 }, 5.2);
+
+    // Scene 2 (5.5s - 11.2s)
+    tl.to("#scene-2", { opacity: 1, duration: 0.4 }, 5.5);
+    tl.fromTo("#s2-header", { y: -30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 5.6);
+    tl.fromTo("#card-fort", { x: -60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: "back.out(1.2)" }, 5.7);
+    tl.fromTo("#card-solar", { x: 60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: "back.out(1.2)" }, 7.2);
+    // beat-locked: 8.74s - highlight pulse on 2,050 MW
+    tl.to("#card-solar", { scale: 1.03, duration: 0.15, yoyo: true, repeat: 1, ease: "power1.inOut" }, 8.74);
+    tl.to("#scene-2", { opacity: 0, duration: 0.4 }, 10.9);
+
+    // Scene 3 (11.2s - 18.2s)
+    tl.to("#scene-3", { opacity: 1, duration: 0.4 }, 11.2);
+    tl.fromTo("#s3-header", { y: -20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 11.3);
+    // Sequential beat-grid arrivals
+    tl.fromTo("#pillar-heritage", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 11.5);
+    tl.fromTo("#pillar-explorer", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 12.3);
+    // beat-locked: 13.11s Community Pillar
+    tl.fromTo("#pillar-community", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, 13.11);
+
+    // Simulated cursor interaction
+    tl.fromTo("#cursor", { x: 1200, y: 800, opacity: 0 }, { x: 960, y: 720, opacity: 1, duration: 0.8, ease: "power2.out" }, 14.2);
+    tl.to("#cursor", { scale: 0.85, duration: 0.1, yoyo: true, repeat: 1 }, 15.2);
+    tl.to("#btn-explore-map", { scale: 1.1, backgroundColor: "rgba(245, 158, 11, 0.4)", duration: 0.2, yoyo: true, repeat: 1 }, 15.2);
+    tl.to("#cursor", { opacity: 0, duration: 0.3 }, 15.6);
+    tl.to("#scene-3", { opacity: 0, duration: 0.4 }, 17.8);
+
+    // Scene 4 (18.2s - 24.5s)
+    tl.to("#scene-4", { opacity: 1, duration: 0.4 }, 18.2);
+    // beat-locked: 18.56s Outro Seal Slam
+    tl.fromTo("#seal-box", { scale: 0.85, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "back.out(1.4)" }, 18.2);
+    tl.fromTo("#seal-brand", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4 }, 18.3);
+    tl.fromTo("#seal-kannada", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 18.4);
+    tl.fromTo("#seal-triad", { opacity: 0 }, { opacity: 1, duration: 0.4 }, 18.5);
+    tl.fromTo("#seal-cta", { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "elastic.out(1, 0.6)" }, 18.6);
+    tl.to("#bg-hero", { filter: "brightness(0.25) contrast(1.2)", duration: 1.5 }, 18.2);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["root"] = tl;
+  </script>
+</body>
+</html>
