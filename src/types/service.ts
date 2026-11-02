@@ -47,17 +47,39 @@ export interface TransitScheduleItem {
   routeCode: string;
   source: string;
   destination: string;
+  sourceKannada?: string;
+  destinationKannada?: string;
   via: string[];
   operator: 'KSRTC' | 'APSRTC' | 'INDIAN_RAILWAYS' | 'PRIVATE' | 'LOCAL' | string;
   frequencyNote: string;
   isTimetableLive: boolean;
   statusNote: string;
   routeClassification?: 'DEPARTING' | 'PASSING_THROUGH' | string;
+  verificationStatus?: string;
   status?: string;
   stops?: TransitRouteStop[];
   timings?: TransitTiming[];
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface DestinationGroup {
+  destination: string;
+  destinationKannada?: string;
+  totalDepartures: number;
+  routeCount: number;
+  routes: TransitScheduleItem[];
+}
+
+export interface GroupedTransitResponse {
+  summary: {
+    totalRoutes: number;
+    totalDepartures: number;
+    departingCount: number;
+    passingCount: number;
+  };
+  destinations: DestinationGroup[];
+  passingRoutes: TransitScheduleItem[];
 }
 
 export interface CivicServiceContact {

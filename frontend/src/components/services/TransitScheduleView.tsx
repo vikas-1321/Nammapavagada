@@ -2,6 +2,12 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { TransitScheduleItem, TransitTiming } from '../../types/service';
 import { useFeedback } from '../../context/FeedbackContext';
 import {
+  groupAndSortTransitRoutes,
+  isDepartingFromPavagada,
+  parseTimeToMinutes,
+  normalizeDestination,
+} from '../../utils/busSorting';
+import {
   ArrowLeft,
   Phone,
   RotateCw,
@@ -10,6 +16,9 @@ import {
   Flag,
   X,
   AlertCircle,
+  Bus,
+  Info,
+  Compass,
 } from 'lucide-react';
 
 export interface TransitScheduleViewProps {
@@ -26,25 +35,13 @@ export interface TransitScheduleViewProps {
 
 type FilterCategory = 'All Buses' | 'Departing' | 'Passing' | 'Express' | 'Ordinary' | 'Non-Stop';
 
-// Parse departure time to minutes from midnight for accurate chronological sorting
-const parseTimeToMinutes = (timeStr?: string): number => {
-  if (!timeStr) return 9999;
-  const match = timeStr.trim().match(/(\d{1,2}):(\d{2})(?:\s*([APap][Mm]))?/);
-  if (!match) return 9999;
-  let hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const meridiem = match[3]?.toUpperCase();
-  if (meridiem === 'PM' && hours < 12) hours += 12;
-  if (meridiem === 'AM' && hours === 12) hours = 0;
-  return hours * 60 + minutes;
-};
-
 // Clean station title for display
 const cleanStationTitle = (name: string): string => {
   if (!name) return '';
   return name
     .replace(/\s*\(Kempegowda Bus Station \/ Majestic\)/gi, '')
     .replace(/\s*\(Majestic\)/gi, '')
+    .replace(/\s*\(City Bus Stand\)/gi, '')
     .replace(/\s*KSRTC Bus Station/gi, '')
     .replace(/\s*Central Bus Stand/gi, '')
     .replace(/\s*Bus Station/gi, '')
@@ -55,9 +52,7 @@ const cleanStationTitle = (name: string): string => {
 
 // Determine intermediate via places
 const getViaDisplay = (route: TransitScheduleItem): string => {
-  const isPassing =
-    route.routeClassification === 'PASSING_THROUGH' ||
-    !route.source.toLowerCase().includes('pavagada');
+  const isPassing = !isDepartingFromPavagada(route);
 
   let viaList: string[] = [];
   if (Array.isArray(route.via) && route.via.length > 0) {
@@ -147,7 +142,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
     }
   };
 
-  // Compute dynamic counts from authentic backend data
+  // Compute dynamic counts across all authentic routes
   const filterCounts = useMemo(() => {
     let allCount = 0;
     let departingCount = 0;
@@ -157,10 +152,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
     let nonStopCount = 0;
 
     routes.forEach((route) => {
-      const isDeparting =
-        route.routeClassification === 'DEPARTING' ||
-        route.source.toLowerCase().includes('pavagada');
-
+      const isDeparting = isDepartingFromPavagada(route);
       const timings = route.timings || [];
       const routeTimingsCount = timings.length;
 
@@ -177,8 +169,6 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
           nonStopCount++;
         } else if (sc.includes('express')) {
           expressCount++;
-        } else if (sc.includes('ordinary') || !sc) {
-          ordinaryCount++;
         } else {
           ordinaryCount++;
         }
@@ -204,108 +194,19 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
     { label: 'Non-Stop', count: filterCounts['Non-Stop'] },
   ];
 
-  // Filter routes based on selected tab and search query
-  const filteredRoutes = useMemo(() => {
-    const q = query.toLowerCase().trim();
-
-    return routes.filter((route) => {
-      const isDeparting =
-        route.routeClassification === 'DEPARTING' ||
-        route.source.toLowerCase().includes('pavagada');
-      const isPassing = !isDeparting;
-
-      const timings = route.timings || [];
-
-      // Category tab filtering
-      if (activeFilter === 'Departing' && !isDeparting) return false;
-      if (activeFilter === 'Passing' && !isPassing) return false;
-      if (activeFilter === 'Express') {
-        const hasExpress = timings.some((t) =>
-          (t.serviceClass || t.busType || '').toLowerCase().includes('express')
-        );
-        if (!hasExpress) return false;
-      }
-      if (activeFilter === 'Ordinary') {
-        const hasOrdinary = timings.some((t) => {
-          const sc = (t.serviceClass || t.busType || '').toLowerCase();
-          return sc.includes('ordinary') || !sc;
-        });
-        if (!hasOrdinary) return false;
-      }
-      if (activeFilter === 'Non-Stop') {
-        const hasNonStop = timings.some((t) => {
-          const sc = (t.serviceClass || t.busType || '').toLowerCase();
-          return sc.includes('non-stop') || sc.includes('nonstop');
-        });
-        if (!hasNonStop) return false;
-      }
-
-      // Search query filtering
-      if (q) {
-        const srcMatch = route.source?.toLowerCase().includes(q);
-        const destMatch = route.destination?.toLowerCase().includes(q);
-        const codeMatch = route.routeCode?.toLowerCase().includes(q);
-        const opMatch = route.operator?.toLowerCase().includes(q);
-        const viaMatch = Array.isArray(route.via) && route.via.some((v) => v.toLowerCase().includes(q));
-        const stopMatch =
-          Array.isArray(route.stops) &&
-          route.stops.some(
-            (s) =>
-              s.stopName?.toLowerCase().includes(q) ||
-              (s.kannadaName && s.kannadaName.toLowerCase().includes(q))
-          );
-        const timingMatch = timings.some(
-          (t) =>
-            t.remarks?.toLowerCase().includes(q) ||
-            t.viaPlace?.toLowerCase().includes(q) ||
-            t.departureTime?.toLowerCase().includes(q)
-        );
-
-        if (!srcMatch && !destMatch && !codeMatch && !opMatch && !viaMatch && !stopMatch && !timingMatch) {
-          return false;
-        }
-      }
-
-      return true;
-    });
+  // Group and sort routes using the passenger demand hierarchy
+  const groupedData = useMemo(() => {
+    return groupAndSortTransitRoutes(routes, activeFilter, query);
   }, [routes, activeFilter, query]);
 
-  // Compute total departures in filtered view
-  const filteredDeparturesCount = useMemo(() => {
-    return filteredRoutes.reduce((acc, r) => {
-      const timings = r.timings || [];
-      if (activeFilter === 'All Buses' || activeFilter === 'Departing' || activeFilter === 'Passing') {
-        return acc + timings.length;
-      }
-      if (activeFilter === 'Express') {
-        return (
-          acc +
-          timings.filter((t) =>
-            (t.serviceClass || t.busType || '').toLowerCase().includes('express')
-          ).length
-        );
-      }
-      if (activeFilter === 'Ordinary') {
-        return (
-          acc +
-          timings.filter((t) => {
-            const sc = (t.serviceClass || t.busType || '').toLowerCase();
-            return sc.includes('ordinary') || !sc;
-          }).length
-        );
-      }
-      if (activeFilter === 'Non-Stop') {
-        return (
-          acc +
-          timings.filter((t) => {
-            const sc = (t.serviceClass || t.busType || '').toLowerCase();
-            return sc.includes('non-stop') || sc.includes('nonstop');
-          }).length
-        );
-      }
-      return acc + timings.length;
-    }, 0);
-  }, [filteredRoutes, activeFilter]);
+  const {
+    departingDestinations,
+    passingRoutes,
+    totalDeparturesCount,
+    totalRoutesCount,
+    departingDeparturesCount,
+    passingDeparturesCount,
+  } = groupedData;
 
   // Helper to group timings by service class for the expanded timetable view
   const groupRouteTimings = (timings?: TransitTiming[]) => {
@@ -420,11 +321,184 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
     );
   }
 
+  // Render individual route card component
+  const renderRouteCard = (route: TransitScheduleItem, isPassingSection: boolean = false) => {
+    const originDisplay = cleanStationTitle(route.source) || route.source;
+    const destinationDisplay = cleanStationTitle(route.destination) || route.destination;
+    const viaDisplay = getViaDisplay(route);
+    const primaryServiceType = getPrimaryServiceType(route);
+    const timings = route.timings || [];
+    const isExpanded = expandedRoutes[route.id] ?? false;
+    const groupedTimings = groupRouteTimings(timings);
+    const totalBuses = timings.length;
+
+    return (
+      <article
+        key={route.id}
+        className={`overflow-hidden rounded-xl border transition-all ${
+          isPassingSection
+            ? 'border-[#e4ded0] bg-[#fffdf9] hover:border-[#cfc6b5]'
+            : 'border-[#dcdad3] bg-white shadow-[0_4px_18px_rgba(31,42,34,0.035)] hover:border-[#c8c6be]'
+        }`}
+      >
+        {/* Route Header Row */}
+        <div className="px-5 py-4">
+          <div className="min-w-0">
+            {/* Badges Row */}
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              {/* Operator Badge */}
+              <span className="rounded bg-[#e2eee6] px-2 py-1 text-[9px] font-extrabold tracking-[0.08em] text-[#26543a] uppercase">
+                {route.operator || 'KSRTC'}
+              </span>
+
+              {/* Origin Classification Badge */}
+              {isPassingSection ? (
+                <span className="rounded bg-[#fef3dc] border border-[#f3ddb3] px-2 py-1 text-[9px] font-extrabold tracking-[0.07em] text-[#875a04] uppercase">
+                  PASSING THROUGH PAVAGADA
+                </span>
+              ) : (
+                <span className="rounded bg-[#e2eee6] px-2 py-1 text-[9px] font-extrabold tracking-[0.07em] text-[#26543a] uppercase">
+                  DEPARTING FROM PAVAGADA
+                </span>
+              )}
+
+              {/* Service Type Badge */}
+              <span className="rounded border border-[#d9ddd9] px-2 py-1 text-[9px] font-bold tracking-[0.07em] text-[#566158] uppercase">
+                {primaryServiceType}
+              </span>
+
+              {/* Route Code */}
+              <span className="ml-0.5 font-mono text-[10px] font-semibold text-[#8a8e89]">
+                {route.routeCode}
+              </span>
+            </div>
+
+            {/* Route Heading + Via + Mobile-style Bus Badge */}
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+              <h3 className="text-xl leading-tight font-bold tracking-[-0.025em] text-[#162019] sm:text-2xl font-sans inline-flex items-center flex-wrap gap-1.5">
+                <span>{originDisplay}</span>
+                <span className="px-0.5 font-normal text-[#9aa19b]">→</span>
+                <span>{destinationDisplay}</span>
+                <span className="inline-flex -translate-y-0.5 rounded-full bg-[#e4eee7] px-2.5 py-1 align-middle text-[9px] sm:text-[10px] leading-none font-bold tracking-normal text-[#326145]">
+                  {totalBuses} bus{totalBuses !== 1 ? 'es' : ''}
+                </span>
+              </h3>
+              <p className="text-[11px] font-medium text-[#727a73] font-sans">
+                Via: {viaDisplay}
+              </p>
+            </div>
+
+            {/* Origin note for passing buses */}
+            {isPassingSection && (
+              <p className="mt-1 text-[11px] text-[#936616] font-medium flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Originates at <strong>{route.source}</strong>. Timetable timings indicate departure from origin village.
+                </span>
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Timetable Expansion Row & Body */}
+        <section className="border-t border-[#ebe9e3]">
+          <button
+            type="button"
+            onClick={() => toggleTimetable(route.id)}
+            aria-expanded={isExpanded}
+            className="flex w-full items-center justify-between px-5 py-3 text-left transition-colors hover:bg-[#faf9f6] cursor-pointer"
+          >
+            <span className="flex items-center gap-2 text-xs font-bold text-[#313e35] font-sans">
+              <span className="text-[#66806e]">
+                <Clock className="w-3.5 h-3.5" />
+              </span>
+              <span>{isPassingSection ? 'Origin Timetable Departures' : 'Timetable Departures'}</span>
+              <span className="rounded bg-[#edf0ec] px-1.5 py-0.5 text-[9px] text-[#667068] font-mono">
+                {totalBuses}
+              </span>
+            </span>
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-[#777e78] font-sans">
+              <span>{isExpanded ? 'Hide timetable' : 'Show timetable'}</span>
+              <span
+                className={`text-base leading-none transition-transform duration-200 ${
+                  isExpanded ? '' : 'rotate-180'
+                }`}
+              >
+                ⌃
+              </span>
+            </span>
+          </button>
+
+          {isExpanded && (
+            <div className="border-t border-[#efeee9] bg-[#fcfbf8] px-5 animate-fadeIn">
+              {groupedTimings.length > 0 ? (
+                <div className="grid gap-2.5 py-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {groupedTimings.map((group) => (
+                    <div
+                      key={group.key}
+                      className={`rounded-lg border ${group.borderClass} bg-white p-3 shadow-2xs`}
+                    >
+                      <div className="mb-2.5 flex items-center justify-between">
+                        <span
+                          className={`rounded ${group.badgeClass} px-2 py-1 text-[9px] font-extrabold tracking-[0.08em] uppercase`}
+                        >
+                          {group.label}
+                        </span>
+                        <span className="text-[9px] font-semibold text-[#969b96]">
+                          {group.count} bus{group.count !== 1 ? 'es' : ''}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {group.timings.map((timing) => (
+                          <span
+                            key={timing.id}
+                            className={`rounded-md ${group.chipBg} px-2.5 py-1.5 text-xs font-bold font-sans tracking-tight`}
+                            title={
+                              timing.remarks ||
+                              `${group.label} departure${
+                                isPassingSection ? ` from ${route.source}` : ' from Pavagada'
+                              }`
+                            }
+                          >
+                            {timing.departureTime}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-4 text-center text-xs text-[#8a8e89] italic">
+                  Timetable departures currently unavailable or pending administrative publication.
+                </div>
+              )}
+
+              <footer className="flex justify-between items-center border-t border-[#ebe9e3] py-2.5">
+                {isPassingSection ? (
+                  <span className="text-[10px] text-[#8c744f] italic">
+                    Boarding at Pavagada Bus Stand is subject to real-time highway transit.
+                  </span>
+                ) : <span />}
+                <button
+                  type="button"
+                  onClick={() => handleReportTiming(route)}
+                  className="flex items-center gap-1.5 text-[10px] font-semibold text-[#878b87] transition hover:text-[#704f43] cursor-pointer"
+                >
+                  <Flag className="w-3 h-3" />
+                  <span>Report incorrect timing</span>
+                </button>
+              </footer>
+            </div>
+          )}
+        </section>
+      </article>
+    );
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn text-[#19211c]">
-      {/* =========================================================================
-          1. TOP NAVIGATION BAR (Matching Reference Screenshots)
-      ========================================================================== */}
+      {/* 1. TOP NAVIGATION BAR */}
       {onBackToDirectory && (
         <nav
           className="border-b border-[#dedbd3] -mx-4 md:-mx-8 lg:-mx-12 px-5 py-3.5 sm:px-8 lg:px-12 bg-[#fbf9f5]/90 mb-2"
@@ -446,31 +520,24 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
         </nav>
       )}
 
-      {/* =========================================================================
-          2. PAGE HEADER (Matching Screenshot 3 & 2)
-      ========================================================================== */}
+      {/* 2. PAGE HEADER */}
       <header className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
         <div>
-          {/* Top identification label with status indicator dot */}
           <div className="mb-3 flex items-center gap-2 text-[11px] font-bold tracking-[0.11em] text-[#657068] uppercase font-sans">
             <span className="h-2 w-2 rounded-full bg-[#4b8f63] shadow-[0_0_0_3px_#dfece2]" />
             <span>KSRTC · Chitradurga Division · Pavagada Bus Stand</span>
           </div>
 
-          {/* Main Title */}
           <h1 className="font-serif text-[42px] leading-none font-semibold tracking-[-0.035em] text-[#18221b] sm:text-[52px]">
             Bus &amp; Transport
           </h1>
 
-          {/* Kannada Subtitle */}
           <p className="mt-2 text-sm font-medium text-[#777d77] font-kannada">
             (ಬಸ್ ಮತ್ತು ಸಾರಿಗೆ)
           </p>
         </div>
 
-        {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Official Inquiry Contact */}
           <a
             href="tel:08136244888"
             className="flex h-10 items-center gap-2 rounded-lg border border-[#d3d6d0] bg-white px-4 text-xs font-semibold text-[#334039] shadow-[0_1px_2px_rgba(25,33,28,0.04)] transition hover:border-[#aeb7b0]"
@@ -482,7 +549,6 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
             </span>
           </a>
 
-          {/* Real Refresh Action */}
           <button
             type="button"
             onClick={handleRefresh}
@@ -496,9 +562,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
         </div>
       </header>
 
-      {/* =========================================================================
-          3. FILTER TABS & SEARCH BAR (Matching Screenshot 3 & 2)
-      ========================================================================== */}
+      {/* 3. FILTER TABS & SEARCH BAR */}
       <section aria-label="Bus filters" className="pt-2">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           {/* Horizontally scrollable filter pills */}
@@ -525,8 +589,8 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
             })}
           </div>
 
-          {/* Search Bar on Right on Desktop, stacked below on mobile */}
-          <label className="relative block w-full shrink-0 xl:w-[300px]">
+          {/* Search Bar */}
+          <label className="relative block w-full shrink-0 xl:w-[320px]">
             <span className="absolute top-1/2 left-3.5 -translate-y-1/2 text-[#818780] pointer-events-none">
               <Search className="w-4 h-4" />
             </span>
@@ -534,7 +598,7 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search destination or bus..."
+              placeholder="Search destination, route or via..."
               className="h-10 w-full rounded-lg border border-[#d7d6d0] bg-white pr-9 pl-10 text-xs text-[#273129] outline-none transition placeholder:text-[#9a9e99] focus:border-[#74887a] focus:ring-2 focus:ring-[#dfe7e0] font-sans"
             />
             {query && (
@@ -554,17 +618,15 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
         <p className="mt-2.5 text-[11px] text-[#828680] font-sans">
           Showing{' '}
           <strong className="font-semibold text-[#4f5751]">
-            {filteredDeparturesCount} departures
+            {totalDeparturesCount} departures
           </strong>{' '}
-          across {filteredRoutes.length} routes
+          across {totalRoutesCount} routes
           {query && <span> matching “{query}”</span>}
         </p>
       </section>
 
-      {/* =========================================================================
-          4. BUS ROUTE CARDS (Matching Screenshot 1, 2, 3)
-      ========================================================================== */}
-      {filteredRoutes.length === 0 ? (
+      {/* 4. BUS ROUTE LISTINGS */}
+      {totalRoutesCount === 0 ? (
         <div className="rounded-xl border border-[#dcdad3] bg-white p-10 text-center space-y-3 shadow-xs">
           <h3 className="text-base font-serif font-bold text-[#162019]">No bus routes found</h3>
           <p className="text-xs text-[#727a73] max-w-md mx-auto leading-relaxed">
@@ -584,168 +646,142 @@ export const TransitScheduleView: React.FC<TransitScheduleViewProps> = ({
           )}
         </div>
       ) : (
-        <div className="space-y-4">
-          {filteredRoutes.map((route) => {
-            const isPassing =
-              route.routeClassification === 'PASSING_THROUGH' ||
-              !route.source.toLowerCase().includes('pavagada');
-
-            const originDisplay = cleanStationTitle(route.source) || route.source;
-            const destinationDisplay = cleanStationTitle(route.destination) || route.destination;
-            const viaDisplay = getViaDisplay(route);
-            const primaryServiceType = getPrimaryServiceType(route);
-            const timings = route.timings || [];
-            const isExpanded = expandedRoutes[route.id] ?? false;
-            const groupedTimings = groupRouteTimings(timings);
-            const totalBuses = timings.length;
-
-            return (
-              <article
-                key={route.id}
-                className="overflow-hidden rounded-xl border border-[#dcdad3] bg-white shadow-[0_8px_28px_rgba(31,42,34,0.045)] transition-all hover:border-[#c8c6be]"
-              >
-                {/* Route Header Row */}
-                <div className="px-5 py-4">
-                  <div className="min-w-0">
-                    {/* Badges Row */}
-                    <div className="mb-2 flex flex-wrap items-center gap-1.5">
-                      {/* Operator Badge */}
-                      <span className="rounded bg-[#e2eee6] px-2 py-1 text-[9px] font-extrabold tracking-[0.08em] text-[#26543a] uppercase">
-                        {route.operator || 'KSRTC'}
-                      </span>
-
-                      {/* Origin Classification Badge */}
-                      {isPassing ? (
-                        <span className="rounded bg-[#fff0cd] px-2 py-1 text-[9px] font-extrabold tracking-[0.07em] text-[#875a04] uppercase">
-                          PASSING THROUGH PAVAGADA
-                        </span>
-                      ) : (
-                        <span className="rounded bg-[#e2eee6] px-2 py-1 text-[9px] font-extrabold tracking-[0.07em] text-[#26543a] uppercase">
-                          DEPARTING FROM PAVAGADA
-                        </span>
-                      )}
-
-                      {/* Service Type Badge */}
-                      <span className="rounded border border-[#d9ddd9] px-2 py-1 text-[9px] font-bold tracking-[0.07em] text-[#566158] uppercase">
-                        {primaryServiceType}
-                      </span>
-
-                      {/* Route Code */}
-                      <span className="ml-0.5 font-mono text-[10px] font-semibold text-[#8a8e89]">
-                        {route.routeCode}
-                      </span>
-                    </div>
-
-                    {/* Route Heading + Via + Mobile-style Bus Badge */}
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
-                      <h2 className="text-xl leading-tight font-bold tracking-[-0.025em] text-[#162019] sm:text-2xl font-sans inline-flex items-center flex-wrap gap-1.5">
-                        <span>{originDisplay}</span>
-                        <span className="px-0.5 font-normal text-[#9aa19b]">→</span>
-                        <span>{destinationDisplay}</span>
-                        {/* Bus count pill (styled as in mobile phone for all screen sizes) */}
-                        <span className="inline-flex -translate-y-0.5 rounded-full bg-[#e4eee7] px-2.5 py-1 align-middle text-[9px] sm:text-[10px] leading-none font-bold tracking-normal text-[#326145]">
-                          {totalBuses} bus{totalBuses !== 1 ? 'es' : ''}
-                        </span>
+        <div className="space-y-10">
+          {/* =========================================================================
+              PRIORITY 1: BUSES DEPARTING FROM PAVAGADA (Grouped by Destination Demand)
+          ========================================================================== */}
+          {activeFilter !== 'Passing' && departingDestinations.length > 0 && (
+            <section aria-labelledby="departing-heading" className="space-y-6">
+              {/* Section Header */}
+              <div className="flex items-center justify-between border-b border-[#e1dfd8] pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#173d2a] text-white">
+                    <Bus className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2
+                        id="departing-heading"
+                        className="font-serif text-2xl font-bold tracking-tight text-[#162019]"
+                      >
+                        Buses Departing from Pavagada
                       </h2>
-                      <p className="text-[11px] font-medium text-[#727a73] font-sans">
-                        Via: {viaDisplay}
-                      </p>
+                      <span className="rounded-full bg-[#e2eee6] px-2.5 py-0.5 text-xs font-bold text-[#26543a]">
+                        {departingDeparturesCount} Departures
+                      </span>
                     </div>
+                    <p className="text-xs font-medium text-[#737a74] font-kannada">
+                      ಪಾವಗಡದಿಂದ ಹೊರಡುವ ಬಸ್‌ಗಳು — Sorted by passenger demand &amp; departure frequency
+                    </p>
                   </div>
                 </div>
+              </div>
 
-                {/* =========================================================================
-                    5. TIMETABLE EXPANSION ROW & BODY (Matching Screenshot 1)
-                ========================================================================== */}
-                <section className="border-t border-[#ebe9e3]">
-                  {/* Collapsible Trigger Row */}
-                  <button
-                    type="button"
-                    onClick={() => toggleTimetable(route.id)}
-                    aria-expanded={isExpanded}
-                    className="flex w-full items-center justify-between px-5 py-3 text-left transition-colors hover:bg-[#faf9f6] cursor-pointer"
+              {/* Destination Groups Ordered by Departure Demand */}
+              <div className="space-y-6">
+                {departingDestinations.map((group, idx) => (
+                  <div
+                    key={group.destination}
+                    className="rounded-2xl border border-[#dedcd5] bg-[#faf9f6]/60 p-4 sm:p-5 space-y-4"
                   >
-                    <span className="flex items-center gap-2 text-xs font-bold text-[#313e35] font-sans">
-                      <span className="text-[#66806e]">
-                        <Clock className="w-3.5 h-3.5" />
-                      </span>
-                      <span>Timetable Departures</span>
-                      <span className="rounded bg-[#edf0ec] px-1.5 py-0.5 text-[9px] text-[#667068] font-mono">
-                        {totalBuses}
-                      </span>
-                    </span>
-                    <span className="flex items-center gap-1 text-[10px] font-semibold text-[#777e78] font-sans">
-                      <span>{isExpanded ? 'Hide timetable' : 'Show timetable'}</span>
-                      <span
-                        className={`text-base leading-none transition-transform duration-200 ${
-                          isExpanded ? '' : 'rotate-180'
-                        }`}
-                      >
-                        ⌃
-                      </span>
-                    </span>
-                  </button>
-
-                  {/* Expanded Timetable Grid with Service Type Groups */}
-                  {isExpanded && (
-                    <div className="border-t border-[#efeee9] bg-[#fcfbf8] px-5 animate-fadeIn">
-                      {groupedTimings.length > 0 ? (
-                        <div className="grid gap-2.5 py-3 sm:grid-cols-2 lg:grid-cols-3">
-                          {groupedTimings.map((group) => (
-                            <div
-                              key={group.key}
-                              className={`rounded-lg border ${group.borderClass} bg-white p-3 shadow-2xs`}
-                            >
-                              {/* Group Header */}
-                              <div className="mb-2.5 flex items-center justify-between">
-                                <span
-                                  className={`rounded ${group.badgeClass} px-2 py-1 text-[9px] font-extrabold tracking-[0.08em] uppercase`}
-                                >
-                                  {group.label}
-                                </span>
-                                <span className="text-[9px] font-semibold text-[#969b96]">
-                                  {group.count} bus{group.count !== 1 ? 'es' : ''}
-                                </span>
-                              </div>
-
-                              {/* Departure Time Chips */}
-                              <div className="flex flex-wrap gap-1.5">
-                                {group.timings.map((timing) => (
-                                  <span
-                                    key={timing.id}
-                                    className={`rounded-md ${group.chipBg} px-2.5 py-1.5 text-xs font-bold font-sans tracking-tight`}
-                                    title={timing.remarks || `${group.label} departure from Pavagada`}
-                                  >
-                                    {timing.departureTime}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          ))}
+                    {/* Destination Group Header Card */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[#e7e5de] pb-3">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1b2b21] text-xs font-bold text-white font-mono">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <div className="flex items-baseline gap-2">
+                            <h3 className="text-xl font-bold font-serif text-[#162019]">
+                              To {group.destination}
+                            </h3>
+                            {group.destinationKannada && (
+                              <span className="text-sm font-medium text-[#7d827c] font-kannada">
+                                ({group.destinationKannada})
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#717871]">
+                            Connecting from Pavagada Bus Stand across {group.routeCount} corridor route{group.routeCount !== 1 ? 's' : ''}
+                          </p>
                         </div>
-                      ) : (
-                        <div className="py-4 text-center text-xs text-[#8a8e89] italic">
-                          Timetable departures currently unavailable or pending administrative publication.
-                        </div>
-                      )}
+                      </div>
 
-                      {/* Footer with Report Timing action */}
-                      <footer className="flex justify-end border-t border-[#ebe9e3] py-2.5">
-                        <button
-                          type="button"
-                          onClick={() => handleReportTiming(route)}
-                          className="flex items-center gap-1.5 text-[10px] font-semibold text-[#878b87] transition hover:text-[#704f43] cursor-pointer"
-                        >
-                          <Flag className="w-3 h-3" />
-                          <span>Report incorrect timing</span>
-                        </button>
-                      </footer>
+                      {/* Demand Stat Chip */}
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <span className="inline-flex items-center rounded-lg bg-[#e4eee7] px-3 py-1.5 text-xs font-bold text-[#235137] shadow-2xs">
+                          {group.totalDepartures} Scheduled Departure{group.totalDepartures !== 1 ? 's' : ''}
+                        </span>
+                        {idx === 0 && (
+                          <span className="hidden sm:inline-flex rounded-md bg-[#f6ebdc] px-2 py-1 text-[10px] font-extrabold tracking-wider text-[#91561f] uppercase">
+                            Primary Corridor
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </section>
-              </article>
-            );
-          })}
+
+                    {/* Route Cards in this Destination Group */}
+                    <div className="space-y-3.5">
+                      {group.routes.map((route) => renderRouteCard(route, false))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* =========================================================================
+              PRIORITY 2: BUSES PASSING THROUGH PAVAGADA (Strictly Separated Below)
+          ========================================================================== */}
+          {activeFilter !== 'Departing' && passingRoutes.length > 0 && (
+            <section
+              aria-labelledby="passing-heading"
+              className="space-y-4 pt-4 border-t-2 border-[#e6e2d8]"
+            >
+              {/* Section Header */}
+              <div className="flex items-center justify-between pb-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#91561f] text-white">
+                    <Compass className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2
+                        id="passing-heading"
+                        className="font-serif text-2xl font-bold tracking-tight text-[#162019]"
+                      >
+                        Buses Passing Through Pavagada
+                      </h2>
+                      <span className="rounded-full bg-[#fef3dc] border border-[#f3ddb3] px-2.5 py-0.5 text-xs font-bold text-[#875a04]">
+                        {passingDeparturesCount} Passing Services
+                      </span>
+                    </div>
+                    <p className="text-xs font-medium text-[#737a74] font-kannada">
+                      ಪಾವಗಡ ಮೂಲಕ ಹಾದುಹೋಗುವ ಬಸ್‌ಗಳು — Services originating from outer villages/towns
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Passenger Traffic Disclaimer Banner */}
+              <div className="rounded-xl border border-[#eedec0] bg-[#fffaf0] p-4 text-xs text-[#7e5513] leading-relaxed flex items-start gap-3 shadow-2xs">
+                <AlertCircle className="w-5 h-5 shrink-0 text-[#b27918] mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold text-[#66430d]">
+                    Passenger Notice for Passing-Through Buses:
+                  </p>
+                  <p>
+                    These buses start at surrounding towns and villages (such as Y N Hosakotte, Challakere, and Kalyanadurga) and pass through Pavagada Bus Stand towards Bengaluru. Timetable times shown represent the <strong>scheduled departure from their origin village</strong>. Expected arrival and seat availability at Pavagada Bus Stand are subject to highway transit and road traffic.
+                  </p>
+                </div>
+              </div>
+
+              {/* Passing Routes List */}
+              <div className="space-y-3.5">
+                {passingRoutes.map((route) => renderRouteCard(route, true))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>
