@@ -1,5 +1,22 @@
 import json
+import re
+from typing import Any, cast
 from app.models.base import db, TimestampMixin
+
+def parse_time_to_minutes(time_str: str) -> int:
+    if not time_str:
+        return 9999
+    m = re.match(r"^(\d{1,2}):(\d{2})(?:\s*([APap][Mm]))?$", time_str.strip())
+    if not m:
+        return 9999
+    h, mins = int(m.group(1)), int(m.group(2))
+    mer = m.group(3)
+    if mer:
+        if mer.upper() == "PM" and h < 12:
+            h += 12
+        elif mer.upper() == "AM" and h == 12:
+            h = 0
+    return h * 60 + mins
 
 class BusRoute(db.Model, TimestampMixin):
     __tablename__ = "bus_routes"
@@ -50,10 +67,11 @@ class BusRoute(db.Model, TimestampMixin):
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
         }
         if include_details:
-            data["stops"] = [rs.to_dict() for rs in self.route_stops]
+            data["stops"] = [rs.to_dict() for rs in (self.route_stops or [])]
+            raw_timings: Any = cast(Any, self.timings) or []
             sorted_timings = sorted(
-                self.timings,
-                key=lambda t: (t.serial_number if t.serial_number is not None else 999999, t.departure_time or "")
+                raw_timings,
+                key=lambda t: (parse_time_to_minutes(t.departure_time), t.serial_number if t.serial_number is not None else 999999)
             )
             data["timings"] = [bt.to_dict() for bt in sorted_timings]
         return data

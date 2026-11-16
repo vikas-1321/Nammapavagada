@@ -16,6 +16,20 @@ def get_routes():
     routes, total = bus_service.get_routes(status="ACTIVE", search_query=search_query, limit=limit, offset=offset)
     return api_response({"items": routes, "total": total})
 
+@bus_bp.route("/buses/grouped", methods=["GET"])
+def get_grouped_schedule():
+    service_type = request.args.get("serviceType") or request.args.get("service_type")
+    search_query = request.args.get("q")
+    data = bus_service.get_grouped_schedule(status="ACTIVE", service_type=service_type, search_query=search_query)
+    return api_response(data)
+
+@bus_bp.route("/buses/next", methods=["GET"])
+def get_next_bus():
+    destination = request.args.get("destination")
+    limit = int(request.args.get("limit", 5))
+    data = bus_service.get_next_departures(destination=destination, limit=limit)
+    return api_response(data)
+
 @bus_bp.route("/buses/routes/<route_id>", methods=["GET"])
 def get_route(route_id):
     try:

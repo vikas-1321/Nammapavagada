@@ -31,3 +31,4 @@ class Category(db.Model, TimestampMixin):
             "status": self.status,
             "locationsCount": len(self.locations) if self.locations else 0,
         }
+

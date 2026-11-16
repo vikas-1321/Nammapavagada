@@ -242,3 +242,93 @@ def test_bus_route_and_timing_management(client):
 
     del_route_res = client.delete(f"/api/admin/buses/routes/{tmp_id}", headers=headers)
     assert del_route_res.status_code == 200
+
+def test_bus_priority_grouped_and_next_api(client):
+    # Setup test routes:
+    # 1. Departing to Tumakuru (1 timing)
+    # 2. Departing to Bengaluru (2 timings)
+    # 3. Passing to Bengaluru from Y N Hosakotte (1 timing)
+    login_res = client.post("/api/auth/login", json={
+        "email": "testadmin@pavagada.com",
+        "password": "AdminPass@123"
+    })
+    token = login_res.get_json()["data"]["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Create departing to Tumakuru
+    client.post("/api/admin/buses/routes", headers=headers, json={
+        "id": "pvg-tmk-test",
+        "routeCode": "PVG-TMK-TEST",
+        "source": "Pavagada",
+        "destination": "Tumakuru",
+        "routeClassification": "DEPARTING"
+    })
+    client.post("/api/admin/buses/routes/pvg-tmk-test/timings", headers=headers, json={
+        "departureTime": "09:00 AM",
+        "busType": "ORDINARY"
+    })
+
+    # Create departing to Bengaluru
+    client.post("/api/admin/buses/routes", headers=headers, json={
+        "id": "pvg-blr-test",
+        "routeCode": "PVG-BLR-TEST",
+        "source": "Pavagada",
+        "destination": "Bengaluru",
+        "routeClassification": "DEPARTING"
+    })
+    client.post("/api/admin/buses/routes/pvg-blr-test/timings", headers=headers, json={
+        "departureTime": "06:00 AM",
+        "busType": "EXPRESS"
+    })
+    client.post("/api/admin/buses/routes/pvg-blr-test/timings", headers=headers, json={
+        "departureTime": "08:00 AM",
+        "busType": "EXPRESS"
+    })
+
+    # Create passing from Hosakotte
+    client.post("/api/admin/buses/routes", headers=headers, json={
+        "id": "pass-hsk-test",
+        "routeCode": "PASS-HSK-TEST",
+        "source": "Y N Hosakotte",
+        "destination": "Bengaluru",
+        "routeClassification": "PASSING_THROUGH"
+    })
+    client.post("/api/admin/buses/routes/pass-hsk-test/timings", headers=headers, json={
+        "departureTime": "05:00 AM",
+        "busType": "ORDINARY"
+    })
+
+    # Test 1: GET /api/buses/routes must sort departing by destination demand first, then passing
+    routes_res = client.get("/api/buses/routes")
+    assert routes_res.status_code == 200
+    items = routes_res.get_json()["data"]["items"]
+    # The top route should be Bengaluru (2 departures), then Tumakuru (1 departure), and passing route last
+    blr_route = next(r for r in items if r["id"] == "pvg-blr-test")
+    tmk_route = next(r for r in items if r["id"] == "pvg-tmk-test")
+    pass_route = next(r for r in items if r["id"] == "pass-hsk-test")
+    blr_idx = items.index(blr_route)
+    tmk_idx = items.index(tmk_route)
+    pass_idx = items.index(pass_route)
+
+    assert blr_idx < tmk_idx, "Bengaluru (demand 2) should precede Tumakuru (demand 1)"
+    assert tmk_idx < pass_idx, "Departing routes should precede passing-through routes"
+
+    # Test 2: GET /api/buses/grouped
+    grouped_res = client.get("/api/buses/grouped")
+    assert grouped_res.status_code == 200
+    gdata = grouped_res.get_json()["data"]
+    assert "destinations" in gdata
+    assert "passingRoutes" in gdata
+    assert gdata["summary"]["departingRoutes"] >= 2
+    assert gdata["summary"]["passingRoutes"] >= 1
+    # Check top destination is Bengaluru
+    assert gdata["destinations"][0]["destination"] == "Bengaluru"
+    assert gdata["destinations"][0]["totalDepartures"] >= 2
+
+    # Test 3: GET /api/buses/next
+    next_res = client.get("/api/buses/next?destination=Bengaluru")
+    assert next_res.status_code == 200
+    ndata = next_res.get_json()["data"]
+    assert ndata["destination"] == "Bengaluru"
+    assert "popularDestinations" in ndata
+    assert len(ndata["popularDestinations"]) > 0

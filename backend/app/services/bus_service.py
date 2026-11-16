@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone, timedelta
 from app.models.base import db
 from app.models.bus_route import BusRoute
 from app.models.bus_stop import BusStop
@@ -6,9 +7,56 @@ from app.models.route_stop import RouteStop
 from app.models.bus_timing import BusTiming
 from app.services.audit_service import audit_service
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def normalize_destination(dest: str) -> str:
+    if not dest:
+        return ""
+    cleaned = dest.strip()
+    if re.search(r"^Bengaluru(\s*\(.*\))?$", cleaned, re.IGNORECASE):
+        return "Bengaluru"
+    if re.search(r"^Tumaku?ru?(\s*.*)?$", cleaned, re.IGNORECASE):
+        return "Tumakuru"
+    cleaned = re.sub(
+        r"\s*(Central Bus Stand|Bus Station|Bus Stand|KSRTC.*)$",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    ).strip()
+    return cleaned
+
+def parse_time_to_minutes(time_str: str) -> int:
+    if not time_str:
+        return 9999
+    m = re.match(r"^(\d{1,2}):(\d{2})(?:\s*([APap][Mm]))?$", time_str.strip())
+    if not m:
+        return 9999
+    h, mins = int(m.group(1)), int(m.group(2))
+    mer = m.group(3)
+    if mer:
+        if mer.upper() == "PM" and h < 12:
+            h += 12
+        elif mer.upper() == "AM" and h == 12:
+            h = 0
+    return h * 60 + mins
+
+def format_minutes_to_12h(mins: int) -> str:
+    h24 = (mins // 60) % 24
+    m = mins % 60
+    meridiem = "PM" if h24 >= 12 else "AM"
+    h12 = 12 if (h24 % 12 == 0) else (h24 % 12)
+    return f"{h12:02d}:{m:02d} {meridiem}"
+
+def is_departing_route(route: BusRoute) -> bool:
+    if route.route_classification == "PASSING_THROUGH":
+        return False
+    if route.route_classification == "DEPARTING":
+        return True
+    return "pavagada" in (route.source or "").lower()
+
 class BusService:
     # --- Routes ---
-    def get_routes(self, status: str = "ACTIVE", search_query: str = None, limit: int = 100, offset: int = 0):
+    def get_routes(self, status: str = "ACTIVE", search_query: str = None, limit: int = 100, offset: int = 0, sort_by_demand: bool = True):
         query = BusRoute.query
         if status and status != "ALL":
             query = query.filter_by(status=status)
@@ -22,8 +70,246 @@ class BusService:
                 | (BusRoute.via_json.ilike(q))
             )
         total = query.count()
-        routes = query.order_by(BusRoute.route_code.asc()).offset(offset).limit(limit).all()
-        return [r.to_dict(include_details=True) for r in routes], total
+        routes = query.all()
+
+        if sort_by_demand:
+            # 1. Destination demand among departing routes (total scheduled departures per destination)
+            dest_demand = {}
+            for r in routes:
+                if is_departing_route(r):
+                    nd = normalize_destination(r.destination)
+                    dest_demand[nd] = dest_demand.get(nd, 0) + len(r.timings)
+
+            # 2. Sort key:
+            # Priority 0: DEPARTING (highest destination demand first, destination name ASC tie-break)
+            # Priority 1: PASSING_THROUGH (destination ASC, earliest departure ASC)
+            def route_sort_key(r):
+                is_dep = is_departing_route(r)
+                priority = 0 if is_dep else 1
+                nd = normalize_destination(r.destination)
+                demand = dest_demand.get(nd, 0) if is_dep else 0
+                earliest_t = min([parse_time_to_minutes(t.departure_time) for t in r.timings] or [9999])
+                return (priority, -demand, nd, earliest_t, r.route_code)
+
+            routes.sort(key=route_sort_key)
+        else:
+            routes.sort(key=lambda r: r.route_code)
+
+        paged_routes = routes[offset:offset + limit]
+        return [r.to_dict(include_details=True) for r in paged_routes], total
+
+    def get_grouped_schedule(self, status: str = "ACTIVE", service_type: str = None, search_query: str = None):
+        """
+        Grouped schedule returned for passengers:
+        - Priority 1: Departing from Pavagada, grouped by destination ranked by scheduled departure count DESC
+        - Priority 2: Passing through Pavagada, clearly designated
+        """
+        query = BusRoute.query
+        if status and status != "ALL":
+            query = query.filter_by(status=status)
+        if search_query and search_query.strip():
+            q = f"%{search_query.strip()}%"
+            query = query.filter(
+                (BusRoute.route_code.ilike(q))
+                | (BusRoute.source.ilike(q))
+                | (BusRoute.destination.ilike(q))
+                | (BusRoute.operator.ilike(q))
+                | (BusRoute.via_json.ilike(q))
+            )
+        routes = query.all()
+
+        departing_routes = []
+        passing_routes = []
+        for r in routes:
+            if is_departing_route(r):
+                departing_routes.append(r)
+            else:
+                passing_routes.append(r)
+
+        st_filter = (service_type or "").upper().strip()
+
+        # Group departing routes by normalized destination
+        groups = {}
+        for r in departing_routes:
+            nd = normalize_destination(r.destination)
+            if nd not in groups:
+                groups[nd] = {
+                    "destination": nd,
+                    "routes": [],
+                    "allTimings": [],
+                }
+
+            matching_timings = []
+            for t in r.timings:
+                sc = (t.service_class or t.bus_type or "").upper()
+                if st_filter:
+                    if st_filter in ("NON_STOP", "NON-STOP", "NONSTOP") and ("NON-STOP" in sc or "NONSTOP" in sc):
+                        matching_timings.append(t)
+                    elif st_filter == "EXPRESS" and "EXPRESS" in sc:
+                        matching_timings.append(t)
+                    elif st_filter == "ORDINARY" and ("ORDINARY" in sc or not sc):
+                        matching_timings.append(t)
+                    elif st_filter in sc:
+                        matching_timings.append(t)
+                else:
+                    matching_timings.append(t)
+
+            if not st_filter or matching_timings:
+                r_dict = r.to_dict(include_details=True)
+                if st_filter:
+                    r_dict["timings"] = [t.to_dict() for t in matching_timings]
+                groups[nd]["routes"].append(r_dict)
+                for t in matching_timings:
+                    t_dict = t.to_dict()
+                    t_dict["routeCode"] = r.route_code
+                    t_dict["routeSource"] = r.source
+                    t_dict["routeDestination"] = r.destination
+                    t_dict["operator"] = r.operator
+                    t_dict["via"] = r.via
+                    t_dict["minutes"] = parse_time_to_minutes(t.departure_time)
+                    groups[nd]["allTimings"].append(t_dict)
+
+        dest_list = []
+        for nd, g in groups.items():
+            g["allTimings"].sort(key=lambda t: t["minutes"])
+            dest_list.append({
+                "destination": nd,
+                "totalDepartures": len(g["allTimings"]),
+                "routesCount": len(g["routes"]),
+                "routes": g["routes"],
+                "timings": g["allTimings"],
+            })
+
+        # Sort destination groups by total scheduled departures DESC, then destination name ASC
+        dest_list.sort(key=lambda x: (-x["totalDepartures"], x["destination"]))
+
+        # Passing through routes
+        passing_list = []
+        for r in passing_routes:
+            matching_timings = []
+            for t in r.timings:
+                sc = (t.service_class or t.bus_type or "").upper()
+                if st_filter:
+                    if st_filter in ("NON_STOP", "NON-STOP", "NONSTOP") and ("NON-STOP" in sc or "NONSTOP" in sc):
+                        matching_timings.append(t)
+                    elif st_filter == "EXPRESS" and "EXPRESS" in sc:
+                        matching_timings.append(t)
+                    elif st_filter == "ORDINARY" and ("ORDINARY" in sc or not sc):
+                        matching_timings.append(t)
+                    elif st_filter in sc:
+                        matching_timings.append(t)
+                else:
+                    matching_timings.append(t)
+
+            if not st_filter or matching_timings:
+                r_dict = r.to_dict(include_details=True)
+                if st_filter:
+                    r_dict["timings"] = [t.to_dict() for t in matching_timings]
+                r_dict["isPassing"] = True
+                r_dict["sourceOrigin"] = r.source
+                r_dict["timingNote"] = f"Source-recorded departure from {r.source}. Pavagada stop time subject to highway traffic."
+                passing_list.append(r_dict)
+
+        total_deps = sum(d["totalDepartures"] for d in dest_list) + sum(len(r["timings"]) for r in passing_list)
+
+        return {
+            "summary": {
+                "totalDepartures": total_deps,
+                "departingDepartures": sum(d["totalDepartures"] for d in dest_list),
+                "passingDepartures": sum(len(r["timings"]) for r in passing_list),
+                "totalRoutes": len(departing_routes) + len(passing_routes),
+                "departingRoutes": len(departing_routes),
+                "passingRoutes": len(passing_routes),
+                "destinationsCount": len(dest_list),
+            },
+            "destinations": dest_list,
+            "passingRoutes": passing_list,
+        }
+
+    def get_next_departures(self, destination: str = None, limit: int = 5):
+        """
+        Calculate next available departures from Pavagada using local time (Asia/Kolkata).
+        """
+        now_ist = datetime.now(IST)
+        current_mins = now_ist.hour * 60 + now_ist.minute
+
+        routes = BusRoute.query.filter_by(status="ACTIVE").all()
+        dep_routes = [r for r in routes if is_departing_route(r)]
+
+        dest_totals = {}
+        dest_timings_map = {}
+        for r in dep_routes:
+            nd = normalize_destination(r.destination)
+            if nd not in dest_totals:
+                dest_totals[nd] = 0
+                dest_timings_map[nd] = []
+            dest_totals[nd] += len(r.timings)
+            for t in r.timings:
+                tm = parse_time_to_minutes(t.departure_time)
+                dest_timings_map[nd].append({
+                    "id": t.id,
+                    "departureTime": t.departure_time,
+                    "formattedTime": format_minutes_to_12h(tm),
+                    "minutes": tm,
+                    "serviceClass": t.service_class or t.bus_type or "Ordinary",
+                    "busType": (t.bus_type or t.service_class or "ORDINARY").upper(),
+                    "operator": r.operator or "KSRTC",
+                    "routeCode": r.route_code,
+                    "source": r.source,
+                    "destination": r.destination,
+                    "via": " • ".join(r.via) if r.via else (t.via_place or "Madhugiri"),
+                })
+
+        popular_destinations = sorted(
+            [{"destination": k, "totalDepartures": v} for k, v in dest_totals.items()],
+            key=lambda x: (-x["totalDepartures"], x["destination"])
+        )
+
+        target_dest = None
+        if destination and destination.strip():
+            raw_target = destination.strip()
+            norm_target = normalize_destination(raw_target)
+            for p in popular_destinations:
+                if p["destination"].lower() == norm_target.lower() or p["destination"].lower() == raw_target.lower():
+                    target_dest = p["destination"]
+                    break
+            if not target_dest:
+                target_dest = norm_target
+        elif popular_destinations:
+            target_dest = popular_destinations[0]["destination"]
+        else:
+            target_dest = "Bengaluru"
+
+        all_timings = dest_timings_map.get(target_dest, [])
+        all_timings.sort(key=lambda x: x["minutes"])
+
+        upcoming = [t for t in all_timings if t["minutes"] > current_mins]
+        if upcoming:
+            next_dep = upcoming[0]
+            mins_until = next_dep["minutes"] - current_mins
+            upcoming_today = upcoming[1:limit + 1]
+            has_more_today = True
+            first_tomorrow = None
+        else:
+            next_dep = None
+            mins_until = None
+            upcoming_today = []
+            has_more_today = False
+            first_tomorrow = all_timings[0] if all_timings else None
+
+        return {
+            "destination": target_dest,
+            "currentTimeIst": now_ist.strftime("%H:%M"),
+            "currentTimeFormatted": now_ist.strftime("%I:%M %p"),
+            "currentMinutes": current_mins,
+            "nextDeparture": next_dep,
+            "minutesUntil": mins_until,
+            "upcomingToday": upcoming_today,
+            "hasMoreToday": has_more_today,
+            "firstTomorrow": first_tomorrow,
+            "totalDepartures": len(all_timings),
+            "popularDestinations": popular_destinations[:8],
+        }
 
     def get_route_by_id(self, route_id: str) -> BusRoute:
         route = BusRoute.query.get(route_id)
@@ -45,6 +331,10 @@ class BusService:
         if BusRoute.query.get(r_id):
             r_id = f"{r_id}-{BusRoute.query.count() + 1}"
 
+        r_class = data.get("routeClassification") or data.get("route_classification")
+        if not r_class:
+            r_class = "DEPARTING" if "pavagada" in source.lower() else "PASSING_THROUGH"
+
         route = BusRoute(
             id=r_id,
             route_code=code,
@@ -54,6 +344,7 @@ class BusService:
             frequency_note=data.get("frequencyNote") or data.get("frequency_note"),
             status_note=data.get("statusNote") or data.get("status_note"),
             is_timetable_live=bool(data.get("isTimetableLive", data.get("is_timetable_live", False))),
+            route_classification=r_class,
             status=data.get("status", "ACTIVE"),
         )
         route.via = data.get("via", [])
@@ -93,6 +384,8 @@ class BusService:
             route.is_timetable_live = bool(data.get("isTimetableLive", data.get("is_timetable_live")))
         if "status" in data:
             route.status = data["status"]
+        if "routeClassification" in data or "route_classification" in data:
+            route.route_classification = data.get("routeClassification", data.get("route_classification"))
 
         db.session.commit()
 
