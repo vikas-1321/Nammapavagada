@@ -12,6 +12,9 @@ from app.routes.admin_routes import admin_bp
 from app.routes.health_routes import health_bp
 from app.routes.tag_routes import tag_bp
 from app.routes.feedback_routes import feedback_bp
+from app.routes.building_routes import building_bp
+from app.routes.business_routes import business_bp
+from app.routes.survey_routes import survey_bp
 
 def register_blueprints(app):
     app.register_blueprint(auth_bp)
@@ -28,3 +31,6 @@ def register_blueprints(app):
     app.register_blueprint(admin_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(feedback_bp)
+    app.register_blueprint(building_bp)
+    app.register_blueprint(business_bp)
+    app.register_blueprint(survey_bp)

@@ -98,6 +98,51 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         />
       </View>
 
+      {/* Building & Business Intelligence Survey System Card */}
+      <View style={[styles.alertCard, { backgroundColor: '#1E293B', borderColor: '#334155', marginTop: 12 }]}>
+        <View style={styles.alertTop}>
+          <Text style={{ fontSize: 24 }}>🗺️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.alertTitle, { color: '#FFFFFF' }]}>
+              Building & Market Intelligence System
+            </Text>
+            <Text style={[styles.alertSub, { color: '#94A3B8' }]}>
+              OpenStreetMap building survey, shop registration, and gamified market research.
+            </Text>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: colors.primary,
+              paddingVertical: 10,
+              borderRadius: 8,
+              alignItems: 'center',
+            }}
+            onPress={() => navigation?.navigate('BuildingMap')}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>
+              🗺️ Open Map
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: '#334155',
+              paddingVertical: 10,
+              borderRadius: 8,
+              alignItems: 'center',
+            }}
+            onPress={() => navigation?.navigate('SurveyDashboard')}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>
+              📊 Survey Stats
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Primary KPI Grid */}
       <View style={styles.kpiGrid}>
         <TouchableOpacity

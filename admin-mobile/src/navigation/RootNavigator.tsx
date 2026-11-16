@@ -18,6 +18,11 @@ import { SubcategorySelectScreen } from '../screens/categories/SubcategorySelect
 import { PlaceFormScreen } from '../screens/forms/PlaceFormScreen';
 import { BusRouteManageScreen } from '../screens/buses/BusRouteManageScreen';
 import { ProfileScreen } from '../screens/profile/ProfileScreen';
+import { BuildingMapScreen } from '../screens/survey/BuildingMapScreen';
+import { BuildingWizardScreen } from '../screens/survey/BuildingWizardScreen';
+import { BusinessWizardScreen } from '../screens/survey/BusinessWizardScreen';
+import { BuildingDetailScreen } from '../screens/survey/BuildingDetailScreen';
+import { SurveyDashboardScreen } from '../screens/survey/SurveyDashboardScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -57,6 +62,14 @@ const MainTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: 'Dashboard',
           tabBarIcon: ({ focused }) => <TabBarIcon label="📊" focused={focused} />,
+        }}
+      />
+      <Tab.Screen
+        name="SurveyTab"
+        component={BuildingMapScreen}
+        options={{
+          tabBarLabel: 'Building Map',
+          tabBarIcon: ({ focused }) => <TabBarIcon label="🗺️" focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -151,6 +164,31 @@ export const RootNavigator: React.FC = () => {
             <Stack.Screen
               name="BusRouteManage"
               component={BusRouteManageScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="BuildingMap"
+              component={BuildingMapScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="BuildingWizard"
+              component={BuildingWizardScreen}
+              options={{ animation: 'slide_from_bottom' }}
+            />
+            <Stack.Screen
+              name="BusinessWizard"
+              component={BusinessWizardScreen}
+              options={{ animation: 'slide_from_bottom' }}
+            />
+            <Stack.Screen
+              name="BuildingDetail"
+              component={BuildingDetailScreen}
+              options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="SurveyDashboard"
+              component={SurveyDashboardScreen}
               options={{ animation: 'slide_from_right' }}
             />
           </>

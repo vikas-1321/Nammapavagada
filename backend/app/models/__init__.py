@@ -14,6 +14,11 @@ from app.models.historical_place import HistoricalPlace
 from app.models.photo import Photo
 from app.models.audit_log import AuditLog
 from app.models.feedback import Feedback
+from app.models.building import Building, BuildingPhoto
+from app.models.floor import Floor
+from app.models.unit import Unit
+from app.models.business import Business, BusinessProductService, FootfallObservation
+from app.models.surveyor_gamification import SurveyorProfile
 
 from app.models.tag import Tag, place_tags
 
@@ -37,4 +42,12 @@ __all__ = [
     "Photo",
     "AuditLog",
     "Feedback",
+    "Building",
+    "BuildingPhoto",
+    "Floor",
+    "Unit",
+    "Business",
+    "BusinessProductService",
+    "FootfallObservation",
+    "SurveyorProfile",
 ]

@@ -4,6 +4,7 @@ import { PlaceStatus } from '../types';
 export type MainTabParamList = {
   DashboardTab: undefined;
   PlacesTab: { status?: PlaceStatus; category?: string; query?: string } | undefined;
+  SurveyTab: undefined;
   AddTab: undefined;
   BusesTab: { routeId?: string } | undefined;
   ProfileTab: undefined;
@@ -23,4 +24,16 @@ export type RootStackParamList = {
   };
   PlaceDetail: { placeId: string };
   BusRouteManage: { routeId?: string } | undefined;
+  BuildingMap: undefined;
+  BuildingWizard: { initialLat?: number; initialLng?: number; buildingId?: string } | undefined;
+  BusinessWizard: {
+    buildingId?: string;
+    buildingName?: string;
+    unitId?: string;
+    unitNumber?: string;
+    floorName?: string;
+    businessId?: string;
+  } | undefined;
+  BuildingDetail: { buildingId: string };
+  SurveyDashboard: undefined;
 };
