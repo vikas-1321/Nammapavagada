@@ -51,11 +51,51 @@ export const BuildingMapScreen: React.FC = () => {
   const loadMarkers = async () => {
     try {
       setLoading(true);
-      const data = await surveyApi.getBuildingMarkers(selectedType, searchQuery);
-      setMarkers(data);
-      injectMarkersToMap(data);
-    } catch (err: any) {
-      console.warn('Failed to load map markers:', err);
+      // 1. Fetch remote markers (safely returns [] if not reachable or not migrated)
+      let serverMarkers: MapMarkerItem[] = [];
+      try {
+        serverMarkers = await surveyApi.getBuildingMarkers(selectedType, searchQuery);
+      } catch {
+        serverMarkers = [];
+      }
+
+      // 2. Fetch local offline building drafts and map them to markers
+      let draftMarkers: MapMarkerItem[] = [];
+      try {
+        const drafts = await surveyOffline.getDrafts();
+        draftMarkers = drafts
+          .filter((d) => d.type === 'BUILDING' && d.data && d.data.latitude && d.data.longitude)
+          .map((d) => ({
+            id: d.id,
+            code: d.data.code || 'DRAFT',
+            name: `${d.data.name || 'Untitled Building'} (Offline Draft)`,
+            kannadaName: d.data.kannadaName,
+            latitude: Number(d.data.latitude),
+            longitude: Number(d.data.longitude),
+            buildingType: d.data.buildingType || 'COMMERCIAL',
+            commercialSubtype: d.data.commercialSubtype,
+            address: d.data.address || 'Local draft building',
+            area: d.data.area,
+            condition: d.data.condition,
+            unitsCount: d.data.unitsCount || (d.data.units ? d.data.units.length : 0),
+            totalFloors: d.data.totalFloors || 1,
+          }));
+      } catch {
+        draftMarkers = [];
+      }
+
+      // 3. Merge server markers with local draft markers
+      const existingIds = new Set(serverMarkers.map((m) => m.id));
+      const allMarkers = [
+        ...serverMarkers,
+        ...draftMarkers.filter((m) => !existingIds.has(m.id)),
+      ];
+
+      setMarkers(allMarkers);
+      injectMarkersToMap(allMarkers);
+    } catch {
+      setMarkers([]);
+      injectMarkersToMap([]);
     } finally {
       setLoading(false);
     }

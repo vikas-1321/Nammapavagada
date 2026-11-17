@@ -350,10 +350,10 @@ export const BuildingWizardScreen: React.FC = () => {
           <Text style={styles.headerSubtitle}>
             Step {step} of 6: {
               step === 1 ? 'Identification' :
-              step === 2 ? 'Classification' :
-              step === 3 ? 'Physical Structure' :
-              step === 4 ? 'Location' :
-              step === 5 ? 'Photos' : 'Floors & Units'
+                step === 2 ? 'Classification' :
+                  step === 3 ? 'Physical Structure' :
+                    step === 4 ? 'Location' :
+                      step === 5 ? 'Photos' : 'Floors & Units'
             }
           </Text>
         </View>

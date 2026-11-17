@@ -45,7 +45,11 @@ export const surveyApi = {
     limit?: number;
     offset?: number;
   }): Promise<{ items: BuildingItem[]; total: number }> => {
-    return apiClient.get('/buildings', params);
+    try {
+      return await apiClient.get('/buildings', params);
+    } catch {
+      return { items: [], total: 0 };
+    }
   },
 
   getBuildingById: async (id: string): Promise<BuildingItem> => {
@@ -70,11 +74,20 @@ export const surveyApi = {
     name?: string;
     radiusMeters?: number;
   }): Promise<DuplicateCheckResponse> => {
-    return apiClient.post('/buildings/check-duplicate', data);
+    try {
+      return await apiClient.post('/buildings/check-duplicate', data);
+    } catch {
+      return { isDuplicateSuspected: false, matchCount: 0, nearbyBuildings: [] };
+    }
   },
 
   getBuildingMarkers: async (type?: string, query?: string): Promise<MapMarkerItem[]> => {
-    return apiClient.get('/buildings/map/markers', { type, q: query });
+    try {
+      const res = await apiClient.get<MapMarkerItem[]>('/buildings/map/markers', { type, q: query });
+      return Array.isArray(res) ? res : [];
+    } catch {
+      return [];
+    }
   },
 
   addFloor: async (buildingId: string, data: Partial<FloorItem>): Promise<FloorItem> => {
@@ -98,7 +111,11 @@ export const surveyApi = {
     limit?: number;
     offset?: number;
   }): Promise<{ items: BusinessItem[]; total: number }> => {
-    return apiClient.get('/businesses', params);
+    try {
+      return await apiClient.get('/businesses', params);
+    } catch {
+      return { items: [], total: 0 };
+    }
   },
 
   getBusinessById: async (id: string): Promise<BusinessItem> => {
@@ -127,11 +144,43 @@ export const surveyApi = {
 
   // --- Gamification & Sync APIs ---
   getDashboardStats: async (): Promise<SurveyDashboardStats> => {
-    return apiClient.get('/survey/dashboard-stats');
+    try {
+      return await apiClient.get('/survey/dashboard-stats');
+    } catch {
+      return {
+        totalBuildings: 0,
+        totalShops: 0,
+        commercialBuildings: 0,
+        mixedBuildings: 0,
+        residentialBuildings: 0,
+        pendingVerification: 0,
+        dailyChallenges: [],
+        allAvailableBadges: [],
+      };
+    }
   },
 
   getSurveyorProfile: async (): Promise<SurveyorProfile> => {
-    return apiClient.get('/survey/profile');
+    try {
+      return await apiClient.get('/survey/profile');
+    } catch {
+      return {
+        id: 0,
+        adminId: 0,
+        displayName: 'Field Surveyor',
+        totalPoints: 0,
+        levelNumber: 1,
+        levelTitle: 'Novice Scout',
+        nextLevelTarget: 200,
+        levelProgressPct: 0,
+        buildingsMappedCount: 0,
+        shopsRegisteredCount: 0,
+        photosUploadedCount: 0,
+        surveysCompletedCount: 0,
+        verificationsCompletedCount: 0,
+        badges: [],
+      };
+    }
   },
 
   bulkSyncSurveys: async (payload: {
