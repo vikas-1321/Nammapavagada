@@ -66,6 +66,7 @@ class Building(db.Model, TimestampMixin):
     floors = db.relationship("Floor", backref="building", lazy="dynamic", cascade="all, delete-orphan", order_by="Floor.floor_level")
     units = db.relationship("Unit", backref="building", lazy="dynamic", cascade="all, delete-orphan")
     photos = db.relationship("BuildingPhoto", backref="building", lazy="dynamic", cascade="all, delete-orphan")
+    businesses = db.relationship("Business", backref="building", lazy="dynamic")
 
     def to_dict(self, include_children: bool = False) -> dict:
         data = {
@@ -115,6 +116,8 @@ class Building(db.Model, TimestampMixin):
             "status": self.status,
             "photosCount": self.photos.count() if hasattr(self, "photos") else 0,
             "unitsCount": self.units.count() if hasattr(self, "units") else 0,
+            "floorsCount": self.floors.count() if hasattr(self, "floors") else 0,
+            "businessesCount": self.businesses.filter_by(status="ACTIVE").count() if hasattr(self, "businesses") else 0,
         }
 
         # Include first primary photo URL if present

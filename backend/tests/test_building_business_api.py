@@ -260,3 +260,74 @@ def test_building_and_business_survey_lifecycle(client):
     saved_biz_res = client.get(f"/api/businesses/{reconciled_biz_id}", headers=headers)
     assert saved_biz_res.status_code == 200
     assert saved_biz_res.get_json()["data"]["buildingId"] == reconciled_bld_id
+
+
+def test_building_and_business_archive_workflow(client):
+    token = get_auth_token(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # 1. Create Building
+    b_res = client.post("/api/buildings", json={
+        "name": "Archive Test Arcade",
+        "address": "Subhash Road",
+        "area": "Town Center",
+        "buildingType": "Commercial",
+        "latitude": 14.1011,
+        "longitude": 77.2788,
+        "floors": [{
+            "floorLevel": 0,
+            "floorName": "Ground",
+            "units": [{"unitNumber": "A-1", "unitType": "Retail Shop", "usage": "Commercial"}]
+        }]
+    }, headers=headers)
+    assert b_res.status_code == 201
+    b_data = b_res.get_json()["data"]
+    bld_id = b_data["id"]
+    unit_id = b_data["floors"][0]["units"][0]["id"]
+
+    # 2. Register Business in this Building & Unit
+    biz_res = client.post("/api/businesses", json={
+        "buildingId": bld_id,
+        "unitId": unit_id,
+        "name": "Shri Venkateshwara Electronics",
+        "businessModel": "Retail",
+        "shopOrUnitNumber": "A-1",
+    }, headers=headers)
+    assert biz_res.status_code == 201
+    biz_id = biz_res.get_json()["data"]["id"]
+
+    # 3. Verify markers include businessesCount
+    markers_res = client.get("/api/buildings/map/markers")
+    assert markers_res.status_code == 200
+    markers = markers_res.get_json()["data"]
+    matching = [m for m in markers if m["id"] == bld_id]
+    assert len(matching) == 1
+    assert matching[0]["businessesCount"] == 1
+
+    # 4. Attempt hard delete without force -> 409 Conflict
+    hard_del_res = client.delete(f"/api/buildings/{bld_id}?archive=false", headers=headers)
+    assert hard_del_res.status_code == 409
+
+    # 5. Safe Archive Building -> Success, businesses preserved
+    archive_res = client.delete(f"/api/buildings/{bld_id}?archive=true", headers=headers)
+    assert archive_res.status_code == 200
+    assert archive_res.get_json()["data"]["archived"] is True
+    assert archive_res.get_json()["data"]["businessesPreserved"] == 1
+
+    # Verify building marker is now removed from active map
+    m_after = client.get("/api/buildings/map/markers").get_json()["data"]
+    assert not any(m["id"] == bld_id for m in m_after)
+
+    # Verify business record still exists in archive
+    biz_check = client.get(f"/api/businesses/{biz_id}", headers=headers)
+    assert biz_check.status_code == 200
+    assert biz_check.get_json()["data"]["id"] == biz_id
+
+    # 6. Archive Business
+    archive_biz_res = client.delete(f"/api/businesses/{biz_id}?archive=true", headers=headers)
+    assert archive_biz_res.status_code == 200
+    assert archive_biz_res.get_json()["data"]["archived"] is True
+
+    # Verify business status is ARCHIVED
+    biz_archived = client.get(f"/api/businesses/{biz_id}", headers=headers).get_json()["data"]
+    assert biz_archived["status"] == "ARCHIVED"

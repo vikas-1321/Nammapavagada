@@ -167,6 +167,45 @@ export const BuildingWizardScreen: React.FC = () => {
       setResidentialUnitsCount(String(bld.residentialUnitsCount || 0));
       setLatitude(String(bld.latitude));
       setLongitude(String(bld.longitude));
+
+      if (bld.entranceLatitude) setEntranceLat(String(bld.entranceLatitude));
+      if (bld.entranceLongitude) setEntranceLng(String(bld.entranceLongitude));
+      if (bld.approxSizeSqft) setApproxSizeSqft(String(bld.approxSizeSqft));
+      if (bld.twoWheelerParking !== undefined) setTwoWheelerParking(bld.twoWheelerParking);
+      if (bld.carParking !== undefined) setCarParking(bld.carParking);
+      if (bld.liftAvailable !== undefined) setLiftAvailable(bld.liftAvailable);
+      if (bld.roadAccessWidth) setRoadWidth(bld.roadAccessWidth);
+      if (bld.vacantUnitsCount !== undefined) setVacantUnitsCount(String(bld.vacantUnitsCount));
+      if (bld.secondaryUsage) setSecondaryUsage(bld.secondaryUsage);
+
+      // Photos
+      if (bld.photos && bld.photos.length > 0) {
+        setPhotos(
+          bld.photos.map((p) => ({
+            url: p.url,
+            photoType: p.photoType || 'Front View',
+            caption: p.caption || '',
+          }))
+        );
+      }
+
+      // Floors & Units
+      if (bld.floors && bld.floors.length > 0) {
+        setFloors(
+          bld.floors.map((f) => ({
+            floorLevel: f.floorLevel,
+            floorName: f.floorName,
+            floorUsage: f.floorUsage,
+            units: (f.units || []).map((u) => ({
+              unitNumber: u.unitNumber,
+              unitName: u.unitName || '',
+              unitType: u.unitType || 'Retail Shop',
+              usage: (u.usage as any) || 'Commercial',
+              occupancyStatus: (u.occupancyStatus as any) || 'Occupied',
+            })),
+          }))
+        );
+      }
     } catch (e: any) {
       Alert.alert('Error', 'Failed to load building data');
     } finally {
@@ -430,8 +469,10 @@ export const BuildingWizardScreen: React.FC = () => {
       setSubmitting(false);
 
       Alert.alert(
-        'Building Mapped Successfully! 🎉',
-        `Recorded "${savedBuilding.name}" (${savedBuilding.code}). +50 Surveyor Points Awarded!`,
+        editBuildingId ? 'Building Updated Successfully! 🎉' : 'Building Mapped Successfully! 🎉',
+        editBuildingId
+          ? `Changes to "${savedBuilding.name}" (${savedBuilding.code}) have been saved successfully.`
+          : `Recorded "${savedBuilding.name}" (${savedBuilding.code}). +50 Surveyor Points Awarded!`,
         [
           {
             text: '+ Add Shop to this Building',
@@ -475,7 +516,7 @@ export const BuildingWizardScreen: React.FC = () => {
           <Text style={styles.backBtnText}>← Back</Text>
         </TouchableOpacity>
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Building Survey</Text>
+          <Text style={styles.headerTitle}>{editBuildingId ? 'Edit Building' : 'Building Survey'}</Text>
           <Text style={styles.headerSubtitle}>
             Step {step} of 6: {
               step === 1 ? 'Identification' :
@@ -947,7 +988,9 @@ export const BuildingWizardScreen: React.FC = () => {
             {submitting ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.navBtnSuccessText}>Complete Building Survey ✓</Text>
+              <Text style={styles.navBtnSuccessText}>
+                {editBuildingId ? '💾 Save Building Updates' : 'Complete Building Survey ✓'}
+              </Text>
             )}
           </TouchableOpacity>
         )}

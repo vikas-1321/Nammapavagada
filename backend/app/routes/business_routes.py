@@ -104,9 +104,17 @@ def delete_business(business_id):
     admin_id = int(admin_info.get("sub")) if admin_info.get("sub") else None
     admin_name = admin_info.get("email", "Admin")
 
+    archive_param = request.args.get("archive", "true").lower()
+    archive_only = archive_param not in ("false", "0", "no")
+
     try:
-        business_service.delete_business(business_id, admin_id=admin_id, admin_name=admin_name)
-        return api_response({"deleted": True, "id": business_id})
+        res = business_service.delete_business(
+            business_id,
+            admin_id=admin_id,
+            admin_name=admin_name,
+            archive_only=archive_only,
+        )
+        return api_response(res)
     except ValueError as e:
         return api_error(str(e), "NOT_FOUND", 404)
 

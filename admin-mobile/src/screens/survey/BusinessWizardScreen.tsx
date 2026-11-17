@@ -79,10 +79,11 @@ export const BusinessWizardScreen: React.FC = () => {
 
   const buildingId = route.params?.buildingId;
   const unitId = route.params?.unitId;
-  const editBusinessId = route.params?.businessId;
+  const editBusinessId = route.params?.editBusinessId || route.params?.businessId;
 
   const [step, setStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [loadingBusiness, setLoadingBusiness] = useState<boolean>(false);
   const [building, setBuilding] = useState<BuildingItem | null>(null);
 
   // 1. Identity
@@ -176,12 +177,88 @@ export const BusinessWizardScreen: React.FC = () => {
     }
   }, [buildingId]);
 
+  useEffect(() => {
+    if (editBusinessId) {
+      loadBusinessDetails(editBusinessId);
+    }
+  }, [editBusinessId]);
+
   const loadBuildingInfo = async (bId: string) => {
     try {
       const b = await surveyApi.getBuildingById(bId);
       setBuilding(b);
     } catch {
       // ignore
+    }
+  };
+
+  const loadBusinessDetails = async (id: string) => {
+    try {
+      setLoadingBusiness(true);
+      const biz = await surveyApi.getBusinessById(id);
+      if (biz) {
+        if (biz.buildingId && !building) {
+          loadBuildingInfo(biz.buildingId);
+        }
+        setName(biz.name || '');
+        setKannadaName(biz.kannadaName || '');
+        if (biz.shopOrUnitNumber) setShopNumber(biz.shopOrUnitNumber);
+        if (biz.floorName) setFloorName(biz.floorName);
+        if (biz.yearEstablished) setYearEstablished(String(biz.yearEstablished));
+        if (biz.ownerName) setOwnerName(biz.ownerName);
+        if (biz.ownershipType) setOwnershipType(biz.ownershipType);
+        if (biz.businessModel) setBusinessModel(biz.businessModel);
+        if (biz.businessStatus) setBusinessStatus(biz.businessStatus);
+        if (biz.subcategory) setSubcategory(biz.subcategory);
+        if (biz.tags && biz.tags.length > 0) setTags(biz.tags);
+        if (biz.productSummary) setProductSummary(biz.productSummary);
+        if (biz.sellsBranded !== undefined) setSellsBranded(biz.sellsBranded);
+        if (biz.manufacturesProducts !== undefined) setManufacturesProducts(biz.manufacturesProducts);
+        if (biz.offersHomeDelivery !== undefined) setOffersHomeDelivery(biz.offersHomeDelivery);
+        if (biz.offersWholesale !== undefined) setOffersWholesale(biz.offersWholesale);
+        if (biz.offersCreditToRegular !== undefined) setOffersCredit(biz.offersCreditToRegular);
+        if (biz.pricePositioning) setPricePositioning(biz.pricePositioning);
+        if (biz.lowestPrice) setLowestPrice(String(biz.lowestPrice));
+        if (biz.highestPrice) setHighestPrice(String(biz.highestPrice));
+        if (biz.paymentMethods && biz.paymentMethods.length > 0) setSelectedPayments(biz.paymentMethods);
+        if (biz.customerTypes && biz.customerTypes.length > 0) setSelectedCustomers(biz.customerTypes);
+        if (biz.servesNearbyVillages !== undefined) setServesVillages(biz.servesNearbyVillages);
+        if (biz.whyCustomersChoose) setWhyCustomersChoose(biz.whyCustomersChoose);
+        if (biz.openTime) setOpenTime(biz.openTime);
+        if (biz.closeTime) setCloseTime(biz.closeTime);
+        if (biz.weeklyHoliday) setWeeklyHoliday(biz.weeklyHoliday);
+        if (biz.peakHours) setPeakHours(biz.peakHours);
+        if (biz.employeeCountRange) setEmployeeRange(biz.employeeCountRange);
+        if (biz.ownerOperated !== undefined) setOwnerOperated(biz.ownerOperated);
+        if (biz.whatsappOrdering !== undefined) setWhatsappOrdering(biz.whatsappOrdering);
+        if (biz.publicPhone) setPublicPhone(biz.publicPhone);
+        if (biz.whatsappNumber) setWhatsappNumber(biz.whatsappNumber);
+        if (biz.googleBusinessUrl) setGoogleBusinessUrl(biz.googleBusinessUrl);
+        if (biz.isContactPublic !== undefined) setIsContactPublic(biz.isContactPublic);
+        if (biz.approxDailyCustomersRange) setDailyCustomersRange(biz.approxDailyCustomersRange);
+        if (biz.growthTrend) setGrowthTrend(biz.growthTrend);
+        if (biz.seasonalDemand !== undefined) setSeasonalDemand(biz.seasonalDemand);
+        if (biz.challenges && biz.challenges.length > 0) setSelectedChallenges(biz.challenges);
+        if (biz.biggestChallenge) setBiggestChallenge(biz.biggestChallenge);
+        if (biz.approxInitialInvestment) setInitialInvestment(biz.approxInitialInvestment);
+        if (biz.requiredSpace) setRequiredSpace(biz.requiredSpace);
+        if (biz.mainSupplierCategories) setSupplierCategories(biz.mainSupplierCategories);
+        if (biz.expansionOpportunities) setExpansionOpportunities(biz.expansionOpportunities);
+        if (biz.financialConsentGranted !== undefined) setFinancialConsent(biz.financialConsentGranted);
+        if (biz.monthlyRevenueRange) setMonthlyRevenueRange(biz.monthlyRevenueRange);
+        if (biz.monthlyRentRange) setMonthlyRentRange(biz.monthlyRentRange);
+        if (biz.estimatedGrossMargin) setEstimatedGrossMargin(biz.estimatedGrossMargin);
+        if (biz.profitabilityAssessment) setProfitabilityAssessment(biz.profitabilityAssessment);
+        if (biz.roadType) setRoadType(biz.roadType);
+        if (biz.pedestrianActivity) setPedestrianActivity(biz.pedestrianActivity);
+        if (biz.competitorCountNearby !== undefined) setCompetitorCount(String(biz.competitorCountNearby));
+        if (biz.products && biz.products.length > 0) setProductsList(biz.products);
+        if (biz.footfallObservations && biz.footfallObservations.length > 0) setFootfallObservations(biz.footfallObservations);
+      }
+    } catch (e: any) {
+      Alert.alert('Notice', 'Could not load business details: ' + (e.message || 'Error'));
+    } finally {
+      setLoadingBusiness(false);
     }
   };
 
@@ -368,40 +445,70 @@ export const BusinessWizardScreen: React.FC = () => {
     };
 
     try {
-      const saved = await surveyApi.createBusiness(payload);
+      let saved: any;
+      if (editBusinessId) {
+        saved = await surveyApi.updateBusiness(editBusinessId, payload);
+      } else {
+        saved = await surveyApi.createBusiness(payload);
+      }
       setSubmitting(false);
 
-      Alert.alert(
-        'Business Registered! 🛍️',
-        `Survey for "${saved.name}" completed successfully! +75 Surveyor Points Awarded!`,
-        [
-          {
-            text: '+ Add Another Shop in this Building',
-            onPress: () => {
-              // Reset key fields for next shop
-              setName('');
-              setKannadaName('');
-              setShopNumber(`Shop 00${Math.floor(Math.random() * 80) + 10}`);
-              setStep(1);
+      if (editBusinessId) {
+        Alert.alert(
+          'Business Updated! 🛍️',
+          `Changes for "${saved.name}" have been saved successfully!`,
+          [
+            {
+              text: 'View Building',
+              onPress: () => {
+                const targetBldId = buildingId || saved.buildingId;
+                if (targetBldId) {
+                  navigation.replace('BuildingDetail', { buildingId: targetBldId });
+                } else {
+                  navigation.goBack();
+                }
+              },
             },
-          },
-          {
-            text: 'View Building',
-            onPress: () => {
-              if (buildingId) {
-                navigation.replace('BuildingDetail', { buildingId });
-              } else {
-                navigation.goBack();
-              }
+            {
+              text: 'Back to Map',
+              onPress: () => navigation.navigate('BuildingMap'),
+              style: 'cancel',
             },
-          },
-          {
-            text: 'Back to Map',
-            onPress: () => navigation.navigate('BuildingMap'),
-            style: 'cancel',
-          },
-        ]
-      );
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Business Registered! 🛍️',
+          `Survey for "${saved.name}" completed successfully! +75 Surveyor Points Awarded!`,
+          [
+            {
+              text: '+ Add Another Shop in this Building',
+              onPress: () => {
+                // Reset key fields for next shop
+                setName('');
+                setKannadaName('');
+                setShopNumber(`Shop 00${Math.floor(Math.random() * 80) + 10}`);
+                setStep(1);
+              },
+            },
+            {
+              text: 'View Building',
+              onPress: () => {
+                if (buildingId) {
+                  navigation.replace('BuildingDetail', { buildingId });
+                } else {
+                  navigation.goBack();
+                }
+              },
+            },
+            {
+              text: 'Back to Map',
+              onPress: () => navigation.navigate('BuildingMap'),
+              style: 'cancel',
+            },
+          ]
+        );
+      }
     } catch (err: any) {
       setSubmitting(false);
       await autoSaveDraft();
@@ -421,7 +528,9 @@ export const BusinessWizardScreen: React.FC = () => {
           <Text style={styles.backBtnText}>← Exit</Text>
         </TouchableOpacity>
         <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Shop & Business Survey</Text>
+          <Text style={styles.headerTitle}>
+            {editBusinessId ? (name ? `Edit: ${name}` : 'Edit Business') : 'Shop & Business Survey'}
+          </Text>
           <Text style={styles.headerSubtitle}>
             Step {step} of 12: {
               step === 1 ? 'Identity' :
@@ -1047,7 +1156,9 @@ export const BusinessWizardScreen: React.FC = () => {
             {submitting ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.navBtnSuccessText}>Complete Shop Survey ✓</Text>
+              <Text style={styles.navBtnSuccessText}>
+                {editBusinessId ? '💾 Save Business Updates' : 'Complete Shop Survey ✓'}
+              </Text>
             )}
           </TouchableOpacity>
         )}

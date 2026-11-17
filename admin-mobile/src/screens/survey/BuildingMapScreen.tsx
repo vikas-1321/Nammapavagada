@@ -10,6 +10,7 @@ import {
   Modal,
   ScrollView,
   SafeAreaView,
+  Image,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useNavigation } from '@react-navigation/native';
@@ -173,6 +174,57 @@ export const BuildingMapScreen: React.FC = () => {
     webViewRef.current?.injectJavaScript(script);
   };
 
+  const handleCloseDrawer = () => {
+    setSelectedBuilding(null);
+    webViewRef.current?.injectJavaScript('window.clearSelectedMarker && window.clearSelectedMarker(); true;');
+  };
+
+  const handleDeleteBuilding = (bld: MapMarkerItem | BuildingItem) => {
+    const bizCount = bld.businessesCount || 0;
+    const unitsCount = bld.unitsCount || 0;
+    const floorsCount = bld.totalFloors || (bld as any).floorsCount || 1;
+
+    let warningMsg = `Are you sure you want to delete / archive "${bld.name}"?\n\nFloors: ${floorsCount} • Units: ${unitsCount} • Registered Businesses: ${bizCount}`;
+    if (bizCount > 0) {
+      warningMsg += `\n\n⚠️ Note: This building has ${bizCount} registered business(es). The building will be safely archived to preserve all business and research data.`;
+    }
+
+    Alert.alert(
+      'Delete Building?',
+      warningMsg,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive Building',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              const res = await surveyApi.deleteBuilding(bld.id, true);
+              if (res.archived || res.deleted) {
+                Alert.alert(
+                  'Building Archived',
+                  `"${bld.name}" was successfully archived.${
+                    res.businessesPreserved ? ` ${res.businessesPreserved} business records preserved.` : ''
+                  }`
+                );
+                const updated = markers.filter((m) => m.id !== bld.id);
+                setMarkers(updated);
+                setSelectedBuilding(null);
+                injectMarkersToMap(updated);
+                webViewRef.current?.injectJavaScript('window.clearSelectedMarker && window.clearSelectedMarker(); true;');
+              }
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to archive building');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Generate Leaflet OpenStreetMap HTML
   const leafletHtml = `
     <!DOCTYPE html>
@@ -183,30 +235,85 @@ export const BuildingMapScreen: React.FC = () => {
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <style>
-        body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #F8FAFC; }
-        .custom-pin {
+        body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #F8FAFC; overflow: hidden; }
+
+        /* Minimal GIS Circular Dot Marker */
+        .gis-dot-wrapper {
+          position: relative;
+          width: 14px;
+          height: 14px;
           display: flex;
           align-items: center;
           justify-content: center;
-          width: 32px;
-          height: 32px;
-          border-radius: 16px;
-          color: white;
-          font-weight: bold;
-          font-size: 13px;
-          box-shadow: 0 3px 8px rgba(0,0,0,0.3);
-          border: 2px solid white;
+          cursor: pointer;
         }
+        .gis-dot {
+          width: 11px;
+          height: 11px;
+          border-radius: 50%;
+          border: 1.5px solid #FFFFFF;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .gis-dot:hover {
+          transform: scale(1.2);
+        }
+
+        /* Selected Building Glowing Ring / Halo */
+        .gis-dot-wrapper.selected .gis-dot {
+          width: 13px;
+          height: 13px;
+          border: 2px solid #FFFFFF;
+          box-shadow: 0 0 0 4px rgba(198, 93, 58, 0.45), 0 2px 8px rgba(0, 0, 0, 0.4);
+          transform: scale(1.15);
+        }
+
+        /* Dynamic Zoom-Aware Building Label */
+        .gis-label {
+          position: absolute;
+          left: 17px;
+          top: 50%;
+          transform: translateY(-50%);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-weight: 700;
+          color: #1E293B;
+          background: rgba(255, 255, 255, 0.94);
+          padding: 2px 6px;
+          border-radius: 4px;
+          border: 1px solid rgba(203, 213, 225, 0.9);
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+          pointer-events: none;
+          display: none;
+        }
+        .gis-dot-wrapper.selected .gis-label {
+          background: #1E293B;
+          color: #FFFFFF;
+          border-color: #0F172A;
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+          z-index: 9999;
+        }
+
+        /* Dropped Pin */
         .dropped-pin {
           background: #EF4444;
-          width: 36px;
-          height: 36px;
-          border-radius: 18px;
+          width: 24px;
+          height: 24px;
+          border-radius: 12px;
+          border: 2px solid white;
+          box-shadow: 0 3px 8px rgba(239, 68, 68, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 13px;
           animation: bounce 0.6s infinite alternate;
         }
         @keyframes bounce {
           from { transform: translateY(0); }
-          to { transform: translateY(-8px); }
+          to { transform: translateY(-7px); }
         }
         .leaflet-control-attribution { font-size: 9px !important; }
       </style>
@@ -222,40 +329,170 @@ export const BuildingMapScreen: React.FC = () => {
 
         var markersLayer = L.layerGroup().addTo(map);
         var droppedMarker = null;
+        var markersList = [];
+        var currentSelectedId = null;
 
         function getColorForType(type) {
           if (type === 'Commercial') return '#C65D3A';
           if (type === 'Residential') return '#10B981';
           if (type === 'Mixed-use') return '#6366F1';
-          if (type === 'Government' || type === 'Institutional') return '#1E293B';
           if (type === 'Religious') return '#D97706';
+          if (type === 'Government' || type === 'Institutional') return '#1E293B';
           return '#64748B';
         }
 
-        function getIconForType(type) {
-          if (type === 'Religious') return '🛕';
-          if (type === 'Residential') return '🏠';
-          if (type === 'Mixed-use') return '🏬';
-          if (type === 'Government' || type === 'Institutional') return '🏛️';
-          return '🏢';
+        function escapeHtml(str) {
+          if (!str) return '';
+          return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
         }
+
+        var updateScheduled = false;
+        function scheduleUpdateLabels() {
+          if (!updateScheduled) {
+            updateScheduled = true;
+            requestAnimationFrame(function() {
+              updateScheduled = false;
+              updateLabels();
+            });
+          }
+        }
+
+        function updateLabels() {
+          var zoom = map.getZoom();
+          var bounds = map.getBounds();
+
+          // Low zoom (< 15): small dots ONLY. No labels.
+          if (zoom < 15) {
+            markersList.forEach(function(item) {
+              if (item.labelEl) {
+                if (item.id === currentSelectedId && zoom >= 14) {
+                  item.labelEl.style.display = 'block';
+                  item.labelEl.style.fontSize = '10px';
+                  item.labelEl.style.maxWidth = '100px';
+                } else {
+                  item.labelEl.style.display = 'none';
+                }
+              }
+            });
+            return;
+          }
+
+          var isHighZoom = zoom >= 17;
+          var fontSize = isHighZoom ? '11px' : '10px';
+          var maxWidth = isHighZoom ? '140px' : '100px';
+          var placedBoxes = [];
+
+          // Visible markers in viewport
+          var visible = markersList.filter(function(item) {
+            return bounds.contains(L.latLng(item.lat, item.lng));
+          });
+
+          // Selected marker gets highest priority #1
+          visible.sort(function(a, b) {
+            if (a.id === currentSelectedId) return -1;
+            if (b.id === currentSelectedId) return 1;
+            return 0;
+          });
+
+          visible.forEach(function(item) {
+            var labelEl = item.labelEl;
+            if (!labelEl) return;
+
+            labelEl.style.fontSize = fontSize;
+            labelEl.style.maxWidth = maxWidth;
+
+            var pt = map.latLngToContainerPoint([item.lat, item.lng]);
+
+            var dotBox = {
+              x1: pt.x - 9,
+              y1: pt.y - 9,
+              x2: pt.x + 9,
+              y2: pt.y + 9
+            };
+
+            // Selected building: ALWAYS visible
+            if (item.id === currentSelectedId) {
+              labelEl.style.display = 'block';
+              var approxW = Math.min(isHighZoom ? 140 : 100, item.name.length * (isHighZoom ? 6.5 : 5.5) + 14);
+              var approxH = isHighZoom ? 20 : 16;
+              var labelBox = {
+                x1: pt.x + 12,
+                y1: pt.y - approxH / 2,
+                x2: pt.x + 12 + approxW,
+                y2: pt.y + approxH / 2
+              };
+              placedBoxes.push(dotBox);
+              placedBoxes.push(labelBox);
+              return;
+            }
+
+            var approxW = Math.min(isHighZoom ? 140 : 100, item.name.length * (isHighZoom ? 6.5 : 5.5) + 14);
+            var approxH = isHighZoom ? 20 : 16;
+            var labelBox = {
+              x1: pt.x + 12,
+              y1: pt.y - approxH / 2,
+              x2: pt.x + 12 + approxW,
+              y2: pt.y + approxH / 2
+            };
+
+            var collides = false;
+            for (var i = 0; i < placedBoxes.length; i++) {
+              var pb = placedBoxes[i];
+              if (labelBox.x1 - 4 < pb.x2 && labelBox.x2 + 4 > pb.x1 &&
+                  labelBox.y1 - 2 < pb.y2 && labelBox.y2 + 2 > pb.y1) {
+                collides = true;
+                break;
+              }
+            }
+
+            if (collides) {
+              labelEl.style.display = 'none';
+              placedBoxes.push(dotBox);
+            } else {
+              labelEl.style.display = 'block';
+              placedBoxes.push(dotBox);
+              placedBoxes.push(labelBox);
+            }
+          });
+
+          // Hide markers out of view
+          markersList.forEach(function(item) {
+            if (!bounds.contains(L.latLng(item.lat, item.lng)) && item.labelEl) {
+              item.labelEl.style.display = 'none';
+            }
+          });
+        }
+
+        map.on('moveend zoomend', scheduleUpdateLabels);
 
         window.renderBuildingMarkers = function(list) {
           markersLayer.clearLayers();
+          markersList = [];
+
           list.forEach(function(b) {
             var color = getColorForType(b.buildingType);
-            var symbol = getIconForType(b.buildingType);
-            var iconHtml = '<div class="custom-pin" style="background:' + color + '">' + symbol + '</div>';
+            var isSelected = (b.id === currentSelectedId);
+            var html = '<div class="gis-dot-wrapper' + (isSelected ? ' selected' : '') + '" id="wrap-' + b.id + '">' +
+                       '  <div class="gis-dot" style="background-color: ' + color + ';"></div>' +
+                       '  <div class="gis-label" id="label-' + b.id + '">' + escapeHtml(b.name) + '</div>' +
+                       '</div>';
+
             var customIcon = L.divIcon({
-              html: iconHtml,
+              html: html,
               className: '',
-              iconSize: [32, 32],
-              iconAnchor: [16, 16]
+              iconSize: [14, 14],
+              iconAnchor: [7, 7]
             });
 
             var m = L.marker([b.latitude, b.longitude], { icon: customIcon });
             m.on('click', function(e) {
               L.DomEvent.stopPropagation(e);
+              selectMarker(b.id);
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'MARKER_CLICK',
                 buildingId: b.id,
@@ -263,7 +500,50 @@ export const BuildingMapScreen: React.FC = () => {
               }));
             });
             markersLayer.addLayer(m);
+
+            markersList.push({
+              id: b.id,
+              name: b.name,
+              buildingType: b.buildingType,
+              lat: b.latitude,
+              lng: b.longitude,
+              marker: m,
+              el: null,
+              labelEl: null
+            });
           });
+
+          setTimeout(function() {
+            markersList.forEach(function(item) {
+              item.el = document.getElementById('wrap-' + item.id);
+              item.labelEl = document.getElementById('label-' + item.id);
+            });
+            updateLabels();
+          }, 60);
+        };
+
+        function selectMarker(buildingId) {
+          currentSelectedId = buildingId;
+          markersList.forEach(function(item) {
+            if (item.el) {
+              if (item.id === buildingId) {
+                item.el.classList.add('selected');
+              } else {
+                item.el.classList.remove('selected');
+              }
+            }
+          });
+          scheduleUpdateLabels();
+        }
+
+        window.clearSelectedMarker = function() {
+          currentSelectedId = null;
+          markersList.forEach(function(item) {
+            if (item.el) {
+              item.el.classList.remove('selected');
+            }
+          });
+          scheduleUpdateLabels();
         };
 
         map.on('click', function(e) {
@@ -272,12 +552,12 @@ export const BuildingMapScreen: React.FC = () => {
           if (droppedMarker) {
             map.removeLayer(droppedMarker);
           }
-          var dropHtml = '<div class="custom-pin dropped-pin">📍</div>';
+          var dropHtml = '<div class="dropped-pin">📍</div>';
           var dropIcon = L.divIcon({
             html: dropHtml,
             className: '',
-            iconSize: [36, 36],
-            iconAnchor: [18, 18]
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
           });
           droppedMarker = L.marker([lat, lng], { icon: dropIcon }).addTo(map);
 
@@ -373,10 +653,31 @@ export const BuildingMapScreen: React.FC = () => {
       {selectedBuilding && (
         <View style={styles.drawer}>
           <View style={styles.drawerHeader}>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, marginRight: 8 }}>
               <View style={styles.codeBadge}>
                 <Text style={styles.codeBadgeText}>{selectedBuilding.code}</Text>
                 <Text style={styles.typeTag}>● {selectedBuilding.buildingType}</Text>
+                {Boolean((selectedBuilding as any).verificationStatus || (selectedBuilding as any).locationVerificationStatus) && (
+                  <View
+                    style={[
+                      styles.verifyBadge,
+                      ((selectedBuilding as any).verificationStatus || (selectedBuilding as any).locationVerificationStatus) === 'VERIFIED'
+                        ? styles.verifyBadgeGreen
+                        : styles.verifyBadgeAmber,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.verifyBadgeText,
+                        ((selectedBuilding as any).verificationStatus || (selectedBuilding as any).locationVerificationStatus) === 'VERIFIED'
+                          ? styles.verifyTextGreen
+                          : styles.verifyTextAmber,
+                      ]}
+                    >
+                      {(selectedBuilding as any).verificationStatus || (selectedBuilding as any).locationVerificationStatus}
+                    </Text>
+                  </View>
+                )}
               </View>
               <Text style={styles.buildingTitle}>{selectedBuilding.name}</Text>
               {selectedBuilding.kannadaName && (
@@ -384,45 +685,76 @@ export const BuildingMapScreen: React.FC = () => {
               )}
               <Text style={styles.buildingAddress} numberOfLines={2}>
                 📍 {selectedBuilding.address}
+                {selectedBuilding.area ? `, ${selectedBuilding.area}` : ''}
               </Text>
             </View>
 
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedBuilding(null)}>
-              <Text style={styles.closeBtnText}>✕</Text>
-            </TouchableOpacity>
+            <View style={styles.drawerRightCol}>
+              <TouchableOpacity style={styles.closeBtn} onPress={handleCloseDrawer}>
+                <Text style={styles.closeBtnText}>✕</Text>
+              </TouchableOpacity>
+              {selectedBuilding.primaryPhotoUrl ? (
+                <Image
+                  source={{ uri: selectedBuilding.primaryPhotoUrl }}
+                  style={styles.buildingThumb}
+                  resizeMode="cover"
+                />
+              ) : null}
+            </View>
           </View>
 
           <View style={styles.statsStrip}>
-            <Text style={styles.statItem}>🏬 {selectedBuilding.unitsCount || 0} Registered Units</Text>
             <Text style={styles.statItem}>🏢 {selectedBuilding.totalFloors || 1} Floors</Text>
+            <Text style={styles.statItem}>🏬 {selectedBuilding.unitsCount || 0} Units</Text>
+            <Text style={styles.statItem}>🛍️ {selectedBuilding.businessesCount || 0} Shops</Text>
             <Text style={styles.statItem}>
               🏷️ {(selectedBuilding as any).condition || (selectedBuilding as any).buildingCondition || 'Good'}
             </Text>
           </View>
 
+          {/* 3 Clear Primary Actions: View Details, Edit Building, Delete Building */}
           <View style={styles.drawerActions}>
             <TouchableOpacity
               style={styles.actionBtnSecondary}
               onPress={() => {
                 const bId = selectedBuilding.id;
-                setSelectedBuilding(null);
+                handleCloseDrawer();
                 navigation.navigate('BuildingDetail', { buildingId: bId });
               }}
             >
-              <Text style={styles.actionBtnSecondaryText}>Explore Building</Text>
+              <Text style={styles.actionBtnSecondaryText}>👁️ View Details</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionBtnPrimary}
+              style={styles.actionBtnSecondary}
               onPress={() => {
                 const bId = selectedBuilding.id;
-                setSelectedBuilding(null);
-                navigation.navigate('BusinessWizard', { buildingId: bId });
+                handleCloseDrawer();
+                navigation.navigate('BuildingWizard', { buildingId: bId });
               }}
             >
-              <Text style={styles.actionBtnPrimaryText}>+ Add Shop Here</Text>
+              <Text style={styles.actionBtnSecondaryText}>✏️ Edit Building</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionBtnDanger}
+              onPress={() => handleDeleteBuilding(selectedBuilding)}
+            >
+              <Text style={styles.actionBtnDangerText}>🗑️ Delete</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Quick shortcut to add a business */}
+          <TouchableOpacity
+            style={styles.addShopShortcutBtn}
+            onPress={() => {
+              const bId = selectedBuilding.id;
+              handleCloseDrawer();
+              navigation.navigate('BusinessWizard', { buildingId: bId });
+            }}
+          >
+            <Text style={styles.addShopShortcutText}>+ Register Shop in this Building</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -701,6 +1033,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748B',
   },
+  drawerRightCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+  },
+  buildingThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  verifyBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  verifyBadgeGreen: {
+    backgroundColor: '#DCFCE7',
+  },
+  verifyBadgeAmber: {
+    backgroundColor: '#FEF3C7',
+  },
+  verifyBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  verifyTextGreen: {
+    color: '#166534',
+  },
+  verifyTextAmber: {
+    color: '#B45309',
+  },
   statsStrip: {
     flexDirection: 'row',
     gap: 12,
@@ -717,36 +1083,66 @@ const styles = StyleSheet.create({
   },
   drawerActions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginTop: 12,
   },
   actionBtnPrimary: {
     flex: 1,
     backgroundColor: colors.primary,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 10,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionBtnPrimaryText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 12,
   },
   actionBtnSecondary: {
     flex: 1,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 10,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionBtnSecondaryText: {
     color: '#334155',
     fontWeight: '700',
-    fontSize: 13,
+    fontSize: 12,
+  },
+  actionBtnDanger: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtnDangerText: {
+    color: '#DC2626',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  addShopShortcutBtn: {
+    marginTop: 8,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: 'rgba(198, 93, 58, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(198, 93, 58, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addShopShortcutText: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 12,
   },
   newPinTitle: {
     fontSize: 15,

@@ -116,12 +116,15 @@ export interface BuildingItem {
   footprintGeojson?: string;
   mapReference?: string;
   locationVerificationStatus?: string;
+  verificationStatus?: string;
   surveyorId?: number;
   surveyorName?: string;
   surveyDate?: string;
   primaryPhotoUrl?: string;
   photosCount?: number;
   unitsCount?: number;
+  floorsCount?: number;
+  businessesCount?: number;
   floors?: FloorItem[];
   photos?: BuildingPhotoItem[];
 }
@@ -252,7 +255,26 @@ export interface BusinessItem {
   photos?: string[];
   products?: ProductServiceItem[];
   footfallObservations?: FootfallItem[];
-  // Analyst Research (Restricted)
+  // Flat research fields from API
+  approxInitialInvestment?: string;
+  requiredEquipment?: string;
+  requiredSpace?: string;
+  inventoryRequirements?: string;
+  mainSupplierCategories?: string;
+  staffingSkillsRequired?: string;
+  commonOperatingCosts?: string;
+  expansionOpportunities?: string;
+  analystNotes?: string;
+  financialConsentGranted?: boolean;
+  monthlyRevenueRange?: string;
+  monthlyRentRange?: string;
+  monthlyOperatingExpenses?: string;
+  monthlyStaffExpenses?: string;
+  initialInvestmentRange?: string;
+  estimatedGrossMargin?: string;
+  profitabilityAssessment?: string;
+  majorFinancialChallenge?: string;
+  // Analyst Research (Restricted nested object if present)
   replicationResearch?: {
     approxInitialInvestment?: string;
     requiredEquipment?: string;

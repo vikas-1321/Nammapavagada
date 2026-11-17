@@ -119,11 +119,25 @@ def delete_building(building_id):
     admin_id = int(admin_info.get("sub")) if admin_info.get("sub") else None
     admin_name = admin_info.get("email", "Admin")
 
+    # Default to safe archive workflow
+    archive_param = request.args.get("archive", "true").lower()
+    archive_only = archive_param not in ("false", "0", "no")
+    force = request.args.get("force", "false").lower() in ("true", "1", "yes")
+
     try:
-        building_service.delete_building(building_id, admin_id=admin_id, admin_name=admin_name)
-        return api_response({"deleted": True, "id": building_id})
+        res = building_service.delete_building(
+            building_id,
+            admin_id=admin_id,
+            admin_name=admin_name,
+            archive_only=archive_only,
+            force=force,
+        )
+        return api_response(res)
     except ValueError as e:
-        return api_error(str(e), "NOT_FOUND", 404)
+        msg = str(e)
+        if "not found" in msg.lower():
+            return api_error(msg, "NOT_FOUND", 404)
+        return api_error(msg, "DELETE_CONFLICT", 409)
 
 # --- Floor & Unit Sub-resources ---
 

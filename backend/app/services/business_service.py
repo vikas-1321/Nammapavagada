@@ -275,11 +275,36 @@ class BusinessService:
             raise ValueError(f"Business with id '{business_id}' not found.")
         return biz
 
-    def delete_business(self, business_id: str, admin_id: int = None, admin_name: str = None) -> bool:
+    def delete_business(self, business_id: str, admin_id: int = None, admin_name: str = None, archive_only: bool = True) -> dict:
         biz = Business.query.get(business_id)
         if not biz:
             raise ValueError(f"Business with id '{business_id}' not found.")
 
+        if archive_only:
+            # Soft-delete / Archive: keep historical research & audit trails intact
+            biz.status = "ARCHIVED"
+            biz.business_status = "Permanently closed"
+
+            # Check if unit has any other active businesses
+            if biz.unit:
+                remaining_active = [b for b in biz.unit.businesses.all() if b.id != biz.id and getattr(b, "status", "ACTIVE") != "ARCHIVED"]
+                if not remaining_active:
+                    biz.unit.occupancy_status = "Vacant"
+
+            db.session.commit()
+
+            audit_service.log_action(
+                admin_email=admin_name or "admin",
+                action="ARCHIVE_BUSINESS",
+                entity_type="Business",
+                entity_id=biz.id,
+                admin_id=admin_id,
+                old_values={"name": biz.name, "buildingId": biz.building_id, "status": "ACTIVE"},
+                new_values={"status": "ARCHIVED", "businessStatus": "Permanently closed"},
+            )
+            return {"archived": True, "id": biz.id}
+
+        # Hard delete
         audit_service.log_action(
             admin_email=admin_name or "admin",
             action="DELETE_BUSINESS",
@@ -290,7 +315,7 @@ class BusinessService:
         )
         db.session.delete(biz)
         db.session.commit()
-        return True
+        return {"deleted": True, "id": biz.id}
 
     def list_businesses(
         self,

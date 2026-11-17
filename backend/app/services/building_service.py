@@ -236,10 +236,37 @@ class BuildingService:
             raise ValueError(f"Building with id '{building_id}' not found.")
         return building
 
-    def delete_building(self, building_id: str, admin_id: int = None, admin_name: str = None) -> bool:
+    def delete_building(self, building_id: str, admin_id: int = None, admin_name: str = None, archive_only: bool = True, force: bool = False) -> dict:
         building = Building.query.get(building_id)
         if not building:
             raise ValueError(f"Building with id '{building_id}' not found.")
+
+        # Check associated businesses
+        biz_count = 0
+        if hasattr(building, "businesses"):
+            biz_count = building.businesses.filter_by(status="ACTIVE").count()
+
+        if archive_only:
+            # Soft-delete / Archive workflow: safely preserves businesses, floors, units, audit trails
+            building.status = "ARCHIVED"
+            db.session.commit()
+
+            audit_service.log_action(
+                admin_email=admin_name or "admin",
+                action="ARCHIVE_BUILDING",
+                entity_type="Building",
+                entity_id=building.id,
+                admin_id=admin_id,
+                old_values={"name": building.name, "code": building.code, "status": "ACTIVE"},
+                new_values={"status": "ARCHIVED", "preservedBusinesses": biz_count},
+            )
+            return {"archived": True, "id": building.id, "businessesPreserved": biz_count}
+
+        # Permanent deletion requested
+        if biz_count > 0 and not force:
+            raise ValueError(
+                f"Building has {biz_count} registered business(es). Please archive the building instead to preserve business records, or remove the businesses first."
+            )
 
         audit_service.log_action(
             admin_email=admin_name or "admin",
@@ -251,7 +278,7 @@ class BuildingService:
         )
         db.session.delete(building)
         db.session.commit()
-        return True
+        return {"deleted": True, "id": building.id}
 
     def list_buildings(
         self,
@@ -303,6 +330,7 @@ class BuildingService:
         buildings = q.all()
         markers = []
         for b in buildings:
+            primary_photo = b.photos.filter_by(is_primary=True).first() or b.photos.first()
             markers.append({
                 "id": b.id,
                 "code": b.code,
@@ -317,6 +345,10 @@ class BuildingService:
                 "condition": b.building_condition,
                 "unitsCount": b.units.count(),
                 "totalFloors": b.total_floors,
+                "floorsCount": b.floors.count(),
+                "businessesCount": b.businesses.filter_by(status="ACTIVE").count() if hasattr(b, "businesses") else 0,
+                "verificationStatus": b.location_verification_status,
+                "primaryPhotoUrl": primary_photo.url if primary_photo else None,
             })
         return markers
 

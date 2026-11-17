@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Modal,
   SafeAreaView,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -21,6 +22,7 @@ export const BuildingDetailScreen: React.FC = () => {
 
   const [building, setBuilding] = useState<BuildingItem | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [viewingBusiness, setViewingBusiness] = useState<any | null>(null);
 
   useEffect(() => {
     if (buildingId) {
@@ -38,6 +40,32 @@ export const BuildingDetailScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteBusiness = (biz: any, unit: any) => {
+    Alert.alert(
+      'Archive Shop / Business?',
+      `Are you sure you want to archive "${biz.name}" from ${unit.unitNumber}?\n\nThis will mark the shop as closed and make this unit vacant. Historical research records will be preserved safely.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive Shop',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              await surveyApi.deleteBusiness(biz.id, true);
+              Alert.alert('Shop Archived', `"${biz.name}" has been archived successfully.`);
+              await loadBuilding();
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to archive shop');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -153,13 +181,58 @@ export const BuildingDetailScreen: React.FC = () => {
 
                       {unit.activeBusiness ? (
                         <View style={styles.businessPreview}>
-                          <Text style={styles.bizName}>🛍️ {unit.activeBusiness.name}</Text>
-                          <Text style={styles.bizSub}>
-                            {unit.activeBusiness.businessModel} • {unit.activeBusiness.subcategory || 'Commercial'}
-                          </Text>
-                          {unit.activeBusiness.ownerName && (
-                            <Text style={styles.bizOwner}>Owner: {unit.activeBusiness.ownerName}</Text>
-                          )}
+                          <View style={styles.bizHeaderRow}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.bizName}>🛍️ {unit.activeBusiness.name}</Text>
+                              {unit.activeBusiness.kannadaName && (
+                                <Text style={styles.bizKannada}>{unit.activeBusiness.kannadaName}</Text>
+                              )}
+                              <Text style={styles.bizSub}>
+                                {unit.activeBusiness.businessModel} • {unit.activeBusiness.subcategory || 'Commercial'}
+                              </Text>
+                              {unit.activeBusiness.ownerName && (
+                                <Text style={styles.bizOwner}>Owner: {unit.activeBusiness.ownerName}</Text>
+                              )}
+                            </View>
+                            <View style={styles.bizStatusBadge}>
+                              <Text style={styles.bizStatusText}>
+                                {unit.activeBusiness.businessStatus || 'Operating'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* 3 Clear Actions: View, Edit, Archive */}
+                          <View style={styles.bizActionsRow}>
+                            <TouchableOpacity
+                              style={styles.bizActionBtnSecondary}
+                              onPress={() => setViewingBusiness(unit.activeBusiness)}
+                            >
+                              <Text style={styles.bizActionTextSecondary}>👁️ View Details</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.bizActionBtnPrimary}
+                              onPress={() =>
+                                navigation.navigate('BusinessWizard', {
+                                  businessId: unit.activeBusiness?.id,
+                                  editBusinessId: unit.activeBusiness?.id,
+                                  buildingId: building.id,
+                                  unitId: unit.id,
+                                  unitNumber: unit.unitNumber,
+                                  floorName: floor.floorName,
+                                })
+                              }
+                            >
+                              <Text style={styles.bizActionTextPrimary}>✏️ Edit Shop</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.bizActionBtnDanger}
+                              onPress={() => handleDeleteBusiness(unit.activeBusiness, unit)}
+                            >
+                              <Text style={styles.bizActionTextDanger}>🗑️ Archive</Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
                       ) : (
                         <TouchableOpacity
@@ -184,6 +257,104 @@ export const BuildingDetailScreen: React.FC = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* Business Details Bottom Sheet / Modal */}
+      {viewingBusiness && (
+        <Modal
+          visible={true}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setViewingBusiness(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle}>{viewingBusiness.name}</Text>
+                  {viewingBusiness.kannadaName && (
+                    <Text style={styles.modalKannada}>{viewingBusiness.kannadaName}</Text>
+                  )}
+                  <Text style={styles.modalSub}>
+                    {viewingBusiness.businessModel} • {viewingBusiness.subcategory || 'Commercial'}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setViewingBusiness(null)} style={styles.modalCloseBtn}>
+                  <Text style={styles.modalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalLabel}>OWNER / CONTACT</Text>
+                  <Text style={styles.modalValue}>
+                    {viewingBusiness.ownerName || viewingBusiness.ownerOrRepName || 'Not specified'}
+                  </Text>
+                </View>
+
+                {viewingBusiness.publicPhone ? (
+                  <View style={styles.modalDetailRow}>
+                    <Text style={styles.modalLabel}>PHONE</Text>
+                    <Text style={styles.modalValue}>📞 {viewingBusiness.publicPhone}</Text>
+                  </View>
+                ) : null}
+
+                {viewingBusiness.whatsappNumber ? (
+                  <View style={styles.modalDetailRow}>
+                    <Text style={styles.modalLabel}>WHATSAPP</Text>
+                    <Text style={styles.modalValue}>💬 {viewingBusiness.whatsappNumber}</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalLabel}>OPERATING HOURS</Text>
+                  <Text style={styles.modalValue}>
+                    ⏰ {viewingBusiness.openTime || '09:00'} - {viewingBusiness.closeTime || '21:00'} (Holiday: {viewingBusiness.weeklyHoliday || 'None'})
+                  </Text>
+                </View>
+
+                {viewingBusiness.productSummary ? (
+                  <View style={styles.modalDetailRow}>
+                    <Text style={styles.modalLabel}>PRODUCTS / SERVICES</Text>
+                    <Text style={styles.modalValue}>{viewingBusiness.productSummary}</Text>
+                  </View>
+                ) : null}
+
+                <View style={styles.modalDetailRow}>
+                  <Text style={styles.modalLabel}>PRICE POSITIONING</Text>
+                  <Text style={styles.modalValue}>{viewingBusiness.pricePositioning || 'Economical'}</Text>
+                </View>
+
+                {viewingBusiness.whyCustomersChoose ? (
+                  <View style={styles.modalDetailRow}>
+                    <Text style={styles.modalLabel}>CUSTOMER VALUE PROPOSITION</Text>
+                    <Text style={styles.modalValue}>{viewingBusiness.whyCustomersChoose}</Text>
+                  </View>
+                ) : null}
+              </ScrollView>
+
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={styles.modalEditBtn}
+                  onPress={() => {
+                    const bz = viewingBusiness;
+                    setViewingBusiness(null);
+                    navigation.navigate('BusinessWizard', {
+                      businessId: bz.id,
+                      editBusinessId: bz.id,
+                      buildingId: building.id,
+                      unitId: bz.unitId,
+                      unitNumber: bz.shopOrUnitNumber,
+                      floorName: bz.floorName,
+                    });
+                  }}
+                >
+                  <Text style={styles.modalEditText}>✏️ Edit Shop Details</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 };
@@ -452,6 +623,76 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 1,
   },
+  bizHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  bizKannada: {
+    fontSize: 11,
+    color: '#7A5135',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  bizStatusBadge: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  bizStatusText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#166534',
+    textTransform: 'uppercase',
+  },
+  bizActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  bizActionBtnSecondary: {
+    flex: 1,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  bizActionTextSecondary: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  bizActionBtnPrimary: {
+    flex: 1,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    backgroundColor: 'rgba(198, 93, 58, 0.1)',
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  bizActionTextPrimary: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  bizActionBtnDanger: {
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  bizActionTextDanger: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
   registerShopUnitBtn: {
     marginTop: 6,
     paddingVertical: 6,
@@ -463,6 +704,91 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: colors.primary,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 32,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalKannada: {
+    fontSize: 13,
+    color: '#7A5135',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  modalSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 16,
+    marginLeft: 8,
+  },
+  modalCloseText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  modalBody: {
+    paddingVertical: 12,
+  },
+  modalDetailRow: {
+    marginBottom: 12,
+  },
+  modalLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  modalValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+    lineHeight: 18,
+  },
+  modalFooter: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  modalEditBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalEditText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });
 

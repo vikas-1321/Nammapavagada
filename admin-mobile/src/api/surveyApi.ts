@@ -30,6 +30,10 @@ export interface MapMarkerItem {
   condition?: string;
   unitsCount: number;
   totalFloors: number;
+  floorsCount?: number;
+  businessesCount?: number;
+  verificationStatus?: string;
+  primaryPhotoUrl?: string;
 }
 
 export const surveyApi = {
@@ -64,8 +68,8 @@ export const surveyApi = {
     return apiClient.put(`/buildings/${id}`, data);
   },
 
-  deleteBuilding: async (id: string): Promise<{ deleted: boolean; id: string }> => {
-    return apiClient.delete(`/buildings/${id}`);
+  deleteBuilding: async (id: string, archive: boolean = true): Promise<{ deleted?: boolean; archived?: boolean; id: string; businessesPreserved?: number }> => {
+    return apiClient.delete(`/buildings/${id}?archive=${archive}`);
   },
 
   checkDuplicateBuilding: async (data: {
@@ -130,8 +134,8 @@ export const surveyApi = {
     return apiClient.put(`/businesses/${id}`, data);
   },
 
-  deleteBusiness: async (id: string): Promise<{ deleted: boolean; id: string }> => {
-    return apiClient.delete(`/businesses/${id}`);
+  deleteBusiness: async (id: string, archive: boolean = true): Promise<{ deleted?: boolean; archived?: boolean; id: string }> => {
+    return apiClient.delete(`/businesses/${id}?archive=${archive}`);
   },
 
   addProduct: async (businessId: string, data: Partial<ProductServiceItem>): Promise<ProductServiceItem> => {

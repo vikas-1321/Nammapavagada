@@ -53,7 +53,7 @@ class Unit(db.Model, TimestampMixin):
             "updatedAt": self.updated_at.isoformat() if self.updated_at else None,
         }
         if include_business:
-            b_list = self.businesses.all()
+            b_list = [b for b in self.businesses.all() if getattr(b, "status", "ACTIVE") != "ARCHIVED"]
             data["businesses"] = [b.to_dict(include_restricted=False) for b in b_list]
             data["activeBusiness"] = b_list[0].to_dict(include_restricted=False) if b_list else None
         return data
