@@ -57,3 +57,4 @@ class Unit(db.Model, TimestampMixin):
             data["businesses"] = [b.to_dict(include_restricted=False) for b in b_list]
             data["activeBusiness"] = b_list[0].to_dict(include_restricted=False) if b_list else None
         return data
+

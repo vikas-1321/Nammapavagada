@@ -411,3 +411,4 @@ class FootfallObservation(db.Model, TimestampMixin):
             "surveyorName": self.surveyor_name,
             "createdAt": self.created_at.isoformat() if self.created_at else None,
         }
+

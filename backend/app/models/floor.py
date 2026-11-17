@@ -30,3 +30,4 @@ class Floor(db.Model, TimestampMixin):
         if include_units:
             data["units"] = [u.to_dict(include_business=True) for u in self.units.all()]
         return data
+

@@ -78,3 +78,4 @@ class SurveyorProfile(db.Model, TimestampMixin):
             "badges": self.badges,
             "lastActiveDate": self.last_active_date.isoformat() if self.last_active_date else None,
         }
+

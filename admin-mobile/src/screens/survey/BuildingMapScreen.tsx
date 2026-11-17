@@ -232,11 +232,20 @@ export const BuildingMapScreen: React.FC = () => {
           return '#64748B';
         }
 
+        function getIconForType(type) {
+          if (type === 'Religious') return '🛕';
+          if (type === 'Residential') return '🏠';
+          if (type === 'Mixed-use') return '🏬';
+          if (type === 'Government' || type === 'Institutional') return '🏛️';
+          return '🏢';
+        }
+
         window.renderBuildingMarkers = function(list) {
           markersLayer.clearLayers();
           list.forEach(function(b) {
             var color = getColorForType(b.buildingType);
-            var iconHtml = '<div class="custom-pin" style="background:' + color + '">🏢</div>';
+            var symbol = getIconForType(b.buildingType);
+            var iconHtml = '<div class="custom-pin" style="background:' + color + '">' + symbol + '</div>';
             var customIcon = L.divIcon({
               html: iconHtml,
               className: '',
@@ -308,7 +317,7 @@ export const BuildingMapScreen: React.FC = () => {
 
         {/* Filter Pills */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-          {['ALL', 'Commercial', 'Mixed-use', 'Residential', 'Institutional'].map((type) => (
+          {['ALL', 'Commercial', 'Mixed-use', 'Residential', 'Religious', 'Institutional'].map((type) => (
             <TouchableOpacity
               key={type}
               style={[styles.filterPill, selectedType === type && styles.filterPillActive]}

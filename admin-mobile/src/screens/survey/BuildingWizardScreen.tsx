@@ -38,6 +38,15 @@ const COMMERCIAL_SUBTYPES: { key: CommercialSubtype; label: string }[] = [
   { key: 'market_building', label: 'Market / Shandy Yard Building' },
 ];
 
+const RELIGIOUS_SUBTYPES = [
+  { key: 'temple', label: 'Temple / Devasthana (ದೇವಸ್ಥಾನ)' },
+  { key: 'mosque_dargah', label: 'Mosque / Dargah / Masjid (ಮಸೀದಿ / ದರ್ಗಾ)' },
+  { key: 'church', label: 'Church / Chapel (ಚರ್ಚ್)' },
+  { key: 'mutt_ashram', label: 'Mutt / Matha / Ashram (ಮಠ / ಆಶ್ರಮ)' },
+  { key: 'jain_basadi', label: 'Jain Temple / Basadi (ಬಸದಿ)' },
+  { key: 'shrine_other', label: 'Other Sacred Shrine / Peetha' },
+];
+
 const OCCUPANCY_OPTIONS: OccupancyStatus[] = [
   'Fully occupied',
   'Partially occupied',
@@ -80,6 +89,7 @@ export const BuildingWizardScreen: React.FC = () => {
   // Step 2: Classification
   const [buildingType, setBuildingType] = useState<BuildingType>('Commercial');
   const [commercialSubtype, setCommercialSubtype] = useState<CommercialSubtype>('commercial_multibusiness');
+  const [religiousSubtype, setReligiousSubtype] = useState<string>('temple');
   const [secondaryUsage, setSecondaryUsage] = useState<string>('');
   const [occupancyStatus, setOccupancyStatus] = useState<OccupancyStatus>('Partially occupied');
   const [buildingCondition, setBuildingCondition] = useState<BuildingCondition>('Good');
@@ -143,7 +153,13 @@ export const BuildingWizardScreen: React.FC = () => {
       setLandmark(bld.landmark || '');
       setNotes(bld.identificationNotes || '');
       setBuildingType(bld.buildingType);
-      if (bld.commercialSubtype) setCommercialSubtype(bld.commercialSubtype);
+      if (bld.commercialSubtype) {
+        if (bld.buildingType === 'Religious') {
+          setReligiousSubtype(bld.commercialSubtype);
+        } else {
+          setCommercialSubtype(bld.commercialSubtype);
+        }
+      }
       setOccupancyStatus(bld.occupancyStatus);
       setBuildingCondition(bld.buildingCondition);
       setTotalFloors(String(bld.totalFloors || 1));
@@ -171,11 +187,16 @@ export const BuildingWizardScreen: React.FC = () => {
       identificationNotes: notes,
       sourceOfInformation: sourceInfo,
       buildingType,
-      commercialSubtype,
+      commercialSubtype:
+        buildingType === 'Commercial'
+          ? commercialSubtype
+          : buildingType === 'Religious'
+            ? (religiousSubtype as any)
+            : undefined,
       secondaryUsage,
       occupancyStatus,
       buildingCondition,
-      totalFloors: parseInt(totalFloors, 10) || 1,
+      totalFloors: parseInt(totalFloors, 10) || floors.length,
       commercialUnitsCount: parseInt(commercialUnitsCount, 10) || 0,
       residentialUnitsCount: parseInt(residentialUnitsCount, 10) || 0,
       vacantUnitsCount: parseInt(vacantUnitsCount, 10) || 0,
@@ -221,18 +242,34 @@ export const BuildingWizardScreen: React.FC = () => {
   // Floor and Unit Helpers
   const handleAddFloor = () => {
     const nextLevel = floors.length;
+    const isGround = nextLevel === 0;
+    const floorLabel = isGround
+      ? 'Ground Floor'
+      : nextLevel === 1
+        ? '1st Floor'
+        : nextLevel === 2
+          ? '2nd Floor'
+          : `${nextLevel}th Floor`;
+
+    const defaultUsage =
+      buildingType === 'Residential'
+        ? 'Residential'
+        : buildingType === 'Religious'
+          ? 'Religious'
+          : 'Commercial';
+
     setFloors((prev) => [
       ...prev,
       {
         floorLevel: nextLevel,
-        floorName: `${nextLevel === 1 ? '1st' : nextLevel === 2 ? '2nd' : `${nextLevel}th`} Floor`,
-        floorUsage: 'Commercial',
+        floorName: floorLabel,
+        floorUsage: defaultUsage,
         units: [
           {
-            unitNumber: `Shop ${nextLevel}01`,
+            unitNumber: isGround ? 'Unit G01' : `Unit ${nextLevel}01`,
             unitName: '',
-            unitType: 'Retail Shop',
-            usage: 'Commercial',
+            unitType: buildingType === 'Religious' ? 'Other' : 'Retail Shop',
+            usage: buildingType === 'Residential' ? 'Residential' : 'Commercial',
             occupancyStatus: 'Occupied',
           },
         ],
@@ -240,18 +277,105 @@ export const BuildingWizardScreen: React.FC = () => {
     ]);
   };
 
+  const handleRemoveFloor = (floorIndex: number) => {
+    if (floors.length <= 1) {
+      Alert.alert(
+        'Cannot Remove Floor',
+        'A building must have at least one floor. You can add or remove individual units instead.'
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Remove Floor',
+      `Are you sure you want to remove ${floors[floorIndex].floorName} and all its registered units?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setFloors((prev) => {
+              const updated = prev.filter((_, idx) => idx !== floorIndex);
+              return updated.map((fl, newIdx) => ({
+                ...fl,
+                floorLevel: newIdx,
+              }));
+            });
+          },
+        },
+      ]
+    );
+  };
+
   const handleAddUnit = (floorIndex: number) => {
     setFloors((prev) => {
       const updated = [...prev];
-      const targetFloor = updated[floorIndex];
+      const targetFloor = { ...updated[floorIndex] };
       const nextUnitNum = targetFloor.units.length + 1;
-      targetFloor.units.push({
-        unitNumber: `Shop ${floorIndex === 0 ? '0' : floorIndex}${nextUnitNum < 10 ? `0${nextUnitNum}` : nextUnitNum}`,
-        unitName: '',
-        unitType: 'Retail Shop',
-        usage: 'Commercial',
-        occupancyStatus: 'Occupied',
-      });
+      const prefix = floorIndex === 0 ? 'G' : String(floorIndex);
+      targetFloor.units = [
+        ...targetFloor.units,
+        {
+          unitNumber: `Unit ${prefix}${nextUnitNum < 10 ? `0${nextUnitNum}` : nextUnitNum}`,
+          unitName: '',
+          unitType: buildingType === 'Religious' ? 'Other' : 'Retail Shop',
+          usage: buildingType === 'Residential' ? 'Residential' : 'Commercial',
+          occupancyStatus: 'Occupied',
+        },
+      ];
+      updated[floorIndex] = targetFloor;
+      return updated;
+    });
+  };
+
+  const handleRemoveUnit = (floorIndex: number, unitIndex: number) => {
+    setFloors((prev) => {
+      const updated = [...prev];
+      const targetFloor = { ...updated[floorIndex] };
+      if (targetFloor.units.length <= 1) {
+        Alert.alert(
+          'Remove Last Unit?',
+          'This is the only unit on this floor. Removing it will leave this floor with 0 units. Proceed?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Remove',
+              style: 'destructive',
+              onPress: () => {
+                setFloors((p) => {
+                  const u = [...p];
+                  u[floorIndex] = {
+                    ...u[floorIndex],
+                    units: u[floorIndex].units.filter((_, idx) => idx !== unitIndex),
+                  };
+                  return u;
+                });
+              },
+            },
+          ]
+        );
+        return updated;
+      }
+      targetFloor.units = targetFloor.units.filter((_, idx) => idx !== unitIndex);
+      updated[floorIndex] = targetFloor;
+      return updated;
+    });
+  };
+
+  const handleUpdateUnit = (
+    floorIndex: number,
+    unitIndex: number,
+    field: string,
+    value: any
+  ) => {
+    setFloors((prev) => {
+      const updated = [...prev];
+      const targetFloor = { ...updated[floorIndex] };
+      const targetUnits = [...targetFloor.units];
+      targetUnits[unitIndex] = { ...targetUnits[unitIndex], [field]: value };
+      targetFloor.units = targetUnits;
+      updated[floorIndex] = targetFloor;
       return updated;
     });
   };
@@ -269,7 +393,12 @@ export const BuildingWizardScreen: React.FC = () => {
       identificationNotes: notes,
       sourceOfInformation: sourceInfo,
       buildingType,
-      commercialSubtype: buildingType === 'Commercial' ? commercialSubtype : undefined,
+      commercialSubtype:
+        buildingType === 'Commercial'
+          ? commercialSubtype
+          : buildingType === 'Religious'
+            ? (religiousSubtype as any)
+            : undefined,
       secondaryUsage,
       occupancyStatus,
       buildingCondition,
@@ -484,6 +613,23 @@ export const BuildingWizardScreen: React.FC = () => {
                     onPress={() => setCommercialSubtype(sub.key)}
                   >
                     <Text style={styles.radioDot}>{commercialSubtype === sub.key ? '●' : '○'}</Text>
+                    <Text style={styles.radioLabel}>{sub.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Conditional Religious Subtype */}
+            {buildingType === 'Religious' && (
+              <View style={styles.subBox}>
+                <Text style={styles.fieldLabel}>Religious Place Classification *</Text>
+                {RELIGIOUS_SUBTYPES.map((sub) => (
+                  <TouchableOpacity
+                    key={sub.key}
+                    style={[styles.radioItem, religiousSubtype === sub.key && styles.radioItemActive]}
+                    onPress={() => setReligiousSubtype(sub.key)}
+                  >
+                    <Text style={styles.radioDot}>{religiousSubtype === sub.key ? '●' : '○'}</Text>
                     <Text style={styles.radioLabel}>{sub.label}</Text>
                   </TouchableOpacity>
                 ))}
@@ -720,19 +866,49 @@ export const BuildingWizardScreen: React.FC = () => {
               <View key={fIdx} style={styles.floorCard}>
                 <View style={styles.floorHeader}>
                   <Text style={styles.floorTitle}>🏢 {floor.floorName}</Text>
-                  <Text style={styles.floorTag}>{floor.floorUsage}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={styles.floorTag}>{floor.floorUsage}</Text>
+                    {floors.length > 1 && (
+                      <TouchableOpacity
+                        style={styles.removeFloorBtn}
+                        onPress={() => handleRemoveFloor(fIdx)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.removeFloorText}>🗑️ Remove</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
 
                 <Text style={styles.subHeading}>Registered Units on this Floor:</Text>
-                {floor.units.map((unit, uIdx) => (
-                  <View key={uIdx} style={styles.unitRow}>
-                    <Text style={styles.unitNumberBadge}>{unit.unitNumber}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.unitTitle}>{unit.unitName || 'Unregistered Business'}</Text>
-                      <Text style={styles.unitSub}>{unit.unitType} • {unit.occupancyStatus}</Text>
-                    </View>
+                {floor.units.length === 0 ? (
+                  <View style={styles.emptyUnitsNotice}>
+                    <Text style={styles.emptyUnitsText}>No units on this floor yet. Tap "+ Add Unit" below.</Text>
                   </View>
-                ))}
+                ) : (
+                  floor.units.map((unit, uIdx) => (
+                    <View key={uIdx} style={styles.unitRow}>
+                      <Text style={styles.unitNumberBadge}>{unit.unitNumber}</Text>
+                      <View style={{ flex: 1, marginRight: 6 }}>
+                        <TextInput
+                          style={styles.unitNameInput}
+                          placeholder="Shop / Unit Name (optional)"
+                          placeholderTextColor="#94A3B8"
+                          value={unit.unitName}
+                          onChangeText={(val) => handleUpdateUnit(fIdx, uIdx, 'unitName', val)}
+                        />
+                        <Text style={styles.unitSub}>{unit.unitType} • {unit.occupancyStatus}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.removeUnitBtn}
+                        onPress={() => handleRemoveUnit(fIdx, uIdx)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.removeUnitText}>✕ Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
 
                 <TouchableOpacity
                   style={styles.addUnitBtn}
@@ -1055,6 +1231,57 @@ const styles = StyleSheet.create({
   unitSub: {
     fontSize: 10,
     color: '#64748B',
+  },
+  removeFloorBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+  },
+  removeFloorText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  removeUnitBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    alignSelf: 'center',
+  },
+  removeUnitText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  unitNameInput: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F172A',
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#CBD5E1',
+    marginBottom: 2,
+  },
+  emptyUnitsNotice: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 6,
+  },
+  emptyUnitsText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontStyle: 'italic',
   },
   addUnitBtn: {
     paddingVertical: 6,

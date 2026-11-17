@@ -199,3 +199,4 @@ class SurveyGamificationService:
         }
 
 survey_gamification_service = SurveyGamificationService()
+

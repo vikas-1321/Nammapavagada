@@ -385,3 +385,4 @@ class BuildingService:
         return photo
 
 building_service = BuildingService()
+

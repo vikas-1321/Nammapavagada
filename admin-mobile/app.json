@@ -3,6 +3,7 @@
     "name": "Namma Pavagada Admin",
     "slug": "nammapavagada-admin",
     "version": "1.0.0",
+    "newArchEnabled": true,
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "android": {
