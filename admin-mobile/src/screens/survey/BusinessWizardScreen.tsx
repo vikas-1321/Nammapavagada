@@ -81,6 +81,11 @@ export const BusinessWizardScreen: React.FC = () => {
   const unitId = route.params?.unitId;
   const editBusinessId = route.params?.editBusinessId || route.params?.businessId;
 
+  // Single persistent draft ID for this business session to prevent multiple drafts
+  const [draftId] = useState<string>(
+    () => route.params?.draftId || `draft_biz_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+  );
+
   const [step, setStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [loadingBusiness, setLoadingBusiness] = useState<boolean>(false);
@@ -323,7 +328,7 @@ export const BusinessWizardScreen: React.FC = () => {
     };
 
     await surveyOffline.saveDraft({
-      id: editBusinessId || `draft_biz_${Date.now()}`,
+      id: editBusinessId || draftId,
       type: 'BUSINESS',
       title: name || 'Business Survey Draft',
       subtitle: `${building?.name || 'Building'} • ${businessModel}`,
@@ -379,6 +384,7 @@ export const BusinessWizardScreen: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (submitting) return;
     if (!name.trim()) {
       Alert.alert('Required', 'Please provide a valid business name.');
       return;
@@ -451,6 +457,13 @@ export const BusinessWizardScreen: React.FC = () => {
       } else {
         saved = await surveyApi.createBusiness(payload);
       }
+
+      // Delete draft immediately upon successful cloud save
+      await surveyOffline.deleteDraft(draftId);
+      if (editBusinessId) {
+        await surveyOffline.deleteDraft(editBusinessId);
+      }
+
       setSubmitting(false);
 
       if (editBusinessId) {

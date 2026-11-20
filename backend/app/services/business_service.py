@@ -1,3 +1,4 @@
+import re
 import uuid
 import json
 from datetime import datetime
@@ -25,6 +26,17 @@ class BusinessService:
 
         unit_id = data.get("unitId") or data.get("unit_id")
         floor_id = data.get("floorId") or data.get("floor_id")
+
+        # Enforce rule: Only one business with this name per building
+        existing_biz = Business.query.filter(
+            Business.building_id == building_id,
+            Business.status != "ARCHIVED",
+            db.func.lower(Business.name) == name.lower(),
+        ).first()
+
+        if existing_biz and not data.get("forceCreateDuplicate"):
+            # Update the existing business instead of creating duplicate
+            return self.update_business(existing_biz.id, data, admin_id=admin_id, admin_name=admin_name)
 
         # If unit is provided, verify and sync
         unit = Unit.query.get(unit_id) if unit_id else None

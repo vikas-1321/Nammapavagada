@@ -70,6 +70,17 @@ class BuildingService:
         lat = float(data.get("latitude") or 14.1025)
         lng = float(data.get("longitude") or 77.2798)
 
+        # Enforce rule: Only one active building at a given coordinate point (~2-3m threshold)
+        existing_at_point = Building.query.filter(
+            Building.status != "ARCHIVED",
+            Building.latitude.between(lat - 0.00003, lat + 0.00003),
+            Building.longitude.between(lng - 0.00003, lng + 0.00003),
+        ).first()
+
+        if existing_at_point and not data.get("forceCreateAtPoint"):
+            # Update the existing building at this point instead of creating a duplicate
+            return self.update_building(existing_at_point.id, data, admin_id=admin_id, admin_name=admin_name)
+
         building = Building(
             id=building_id,
             code=code,

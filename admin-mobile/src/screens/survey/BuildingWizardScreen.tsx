@@ -71,6 +71,11 @@ export const BuildingWizardScreen: React.FC = () => {
   const initialLng = route.params?.initialLng || 77.2798;
   const editBuildingId = route.params?.buildingId;
 
+  // Single persistent draft ID for this survey session to prevent multiple drafts
+  const [draftId] = useState<string>(
+    () => route.params?.draftId || `draft_bld_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+  );
+
   const [step, setStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState<boolean>(false);
 
@@ -253,7 +258,7 @@ export const BuildingWizardScreen: React.FC = () => {
     };
 
     await surveyOffline.saveDraft({
-      id: editBuildingId || `draft_bld_${Date.now()}`,
+      id: editBuildingId || draftId,
       type: 'BUILDING',
       title: name || 'Building Draft',
       subtitle: `${area} • ${buildingType}`,
@@ -420,6 +425,7 @@ export const BuildingWizardScreen: React.FC = () => {
   };
 
   const handleSaveBuilding = async () => {
+    if (submitting) return;
     setSubmitting(true);
     const payload = {
       name: name.trim() || undefined,
@@ -464,6 +470,12 @@ export const BuildingWizardScreen: React.FC = () => {
         savedBuilding = await surveyApi.updateBuilding(editBuildingId, payload);
       } else {
         savedBuilding = await surveyApi.createBuilding(payload);
+      }
+
+      // Clean up the local draft upon successful save to prevent duplicate re-sync
+      await surveyOffline.deleteDraft(draftId);
+      if (editBuildingId) {
+        await surveyOffline.deleteDraft(editBuildingId);
       }
 
       setSubmitting(false);

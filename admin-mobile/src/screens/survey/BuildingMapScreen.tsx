@@ -85,12 +85,36 @@ export const BuildingMapScreen: React.FC = () => {
         draftMarkers = [];
       }
 
-      // 3. Merge server markers with local draft markers
+      // 3. Merge server markers with local draft markers (deduplicate strictly by point)
       const existingIds = new Set(serverMarkers.map((m) => m.id));
-      const allMarkers = [
-        ...serverMarkers,
-        ...draftMarkers.filter((m) => !existingIds.has(m.id)),
-      ];
+      const isPointOccupiedByServer = (lat: number, lng: number) => {
+        return serverMarkers.some(
+          (sm) => Math.abs(sm.latitude - lat) < 0.00005 && Math.abs(sm.longitude - lng) < 0.00005
+        );
+      };
+
+      const seenPoints = new Set<string>();
+      const validDraftMarkers: MapMarkerItem[] = [];
+
+      for (const dm of draftMarkers) {
+        if (existingIds.has(dm.id)) continue;
+        if (isPointOccupiedByServer(dm.latitude, dm.longitude)) {
+          // If server already has a building at this point, delete stale draft
+          surveyOffline.deleteDraft(dm.id);
+          continue;
+        }
+
+        const ptKey = `${dm.latitude.toFixed(5)}_${dm.longitude.toFixed(5)}`;
+        if (seenPoints.has(ptKey)) {
+          // Duplicate draft for same point: remove redundant draft
+          surveyOffline.deleteDraft(dm.id);
+          continue;
+        }
+        seenPoints.add(ptKey);
+        validDraftMarkers.push(dm);
+      }
+
+      const allMarkers = [...serverMarkers, ...validDraftMarkers];
 
       setMarkers(allMarkers);
       injectMarkersToMap(allMarkers);
@@ -225,7 +249,7 @@ export const BuildingMapScreen: React.FC = () => {
     );
   };
 
-  // Generate Leaflet OpenStreetMap HTML
+  // Generate Leaflet OpenStreetMap / Google Maps Inspired HTML
   const leafletHtml = `
     <!DOCTYPE html>
     <html>
@@ -233,7 +257,10 @@ export const BuildingMapScreen: React.FC = () => {
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
       <style>
         body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #F8FAFC; overflow: hidden; }
 
@@ -252,11 +279,11 @@ export const BuildingMapScreen: React.FC = () => {
           height: 11px;
           border-radius: 50%;
           border: 1.5px solid #FFFFFF;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+          box-shadow: 0 1px 4px rgba(0,0,0,0.32);
           transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
         .gis-dot:hover {
-          transform: scale(1.2);
+          transform: scale(1.25);
         }
 
         /* Selected Building Glowing Ring / Halo */
@@ -280,7 +307,7 @@ export const BuildingMapScreen: React.FC = () => {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           font-weight: 700;
           color: #1E293B;
-          background: rgba(255, 255, 255, 0.94);
+          background: rgba(255, 255, 255, 0.95);
           padding: 2px 6px;
           border-radius: 4px;
           border: 1px solid rgba(203, 213, 225, 0.9);
@@ -294,6 +321,33 @@ export const BuildingMapScreen: React.FC = () => {
           border-color: #0F172A;
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
           z-index: 9999;
+        }
+
+        /* Professional Cluster Badges (Real building count at low zoom) */
+        .gis-cluster-wrap {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .gis-cluster-circle {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          background: #1E293B;
+          color: #FFFFFF;
+          border: 2px solid #FFFFFF;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-weight: 800;
+          font-size: 11px;
+          letter-spacing: -0.2px;
+          cursor: pointer;
+        }
+        .gis-cluster-circle.cluster-large {
+          background: #C65D3A;
         }
 
         /* Dropped Pin */
@@ -321,13 +375,42 @@ export const BuildingMapScreen: React.FC = () => {
     <body>
       <div id="map"></div>
       <script>
+        // Initialize Map centered on Pavagada
         var map = L.map('map', { zoomControl: false }).setView([${PAVAGADA_CENTER.lat}, ${PAVAGADA_CENTER.lng}], 15);
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19,
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        }).addTo(map);
 
-        var markersLayer = L.layerGroup().addTo(map);
+        // Professional Clean Street Tile Layer (Carto Voyager clean pastel with OSM fallback)
+        var primaryTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+          subdomains: 'abcd',
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        });
+        primaryTiles.addTo(map);
+
+        // Marker layer / Cluster group
+        var hasClusterLib = (typeof L.markerClusterGroup === 'function');
+        var markersGroup = hasClusterLib
+          ? L.markerClusterGroup({
+              maxClusterRadius: 36,
+              disableClusteringAtZoom: 15,
+              spiderfyOnMaxZoom: false,
+              showCoverageOnHover: false,
+              zoomToBoundsOnClick: true,
+              iconCreateFunction: function(cluster) {
+                var count = cluster.getChildCount();
+                var size = count < 10 ? 28 : count < 50 ? 32 : 38;
+                var cls = count >= 20 ? 'gis-cluster-circle cluster-large' : 'gis-cluster-circle';
+                return L.divIcon({
+                  html: '<div class="' + cls + '"><span>' + count + '</span></div>',
+                  className: 'gis-cluster-wrap',
+                  iconSize: [size, size],
+                  iconAnchor: [size / 2, size / 2]
+                });
+              }
+            })
+          : L.layerGroup();
+
+        map.addLayer(markersGroup);
+
         var droppedMarker = null;
         var markersList = [];
         var currentSelectedId = null;
@@ -337,7 +420,9 @@ export const BuildingMapScreen: React.FC = () => {
           if (type === 'Residential') return '#10B981';
           if (type === 'Mixed-use') return '#6366F1';
           if (type === 'Religious') return '#D97706';
-          if (type === 'Government' || type === 'Institutional') return '#1E293B';
+          if (type === 'Institutional' || type === 'Educational') return '#0284C7';
+          if (type === 'Government') return '#1E293B';
+          if (type === 'Healthcare') return '#EC4899';
           return '#64748B';
         }
 
@@ -366,7 +451,7 @@ export const BuildingMapScreen: React.FC = () => {
           var zoom = map.getZoom();
           var bounds = map.getBounds();
 
-          // Low zoom (< 15): small dots ONLY. No labels.
+          // Low zoom (< 15): clusters or small dots ONLY. No labels unless selected.
           if (zoom < 15) {
             markersList.forEach(function(item) {
               if (item.labelEl) {
@@ -382,9 +467,17 @@ export const BuildingMapScreen: React.FC = () => {
             return;
           }
 
-          var isHighZoom = zoom >= 17;
-          var fontSize = isHighZoom ? '11px' : '10px';
-          var maxWidth = isHighZoom ? '140px' : '100px';
+          // Adaptive font size & max-width based on zoom level
+          var fontSize = '10px';
+          var maxWidth = '110px';
+          if (zoom >= 18) {
+            fontSize = '11.5px';
+            maxWidth = '160px';
+          } else if (zoom >= 17) {
+            fontSize = '11px';
+            maxWidth = '135px';
+          }
+
           var placedBoxes = [];
 
           // Visible markers in viewport
@@ -409,30 +502,15 @@ export const BuildingMapScreen: React.FC = () => {
             var pt = map.latLngToContainerPoint([item.lat, item.lng]);
 
             var dotBox = {
-              x1: pt.x - 9,
-              y1: pt.y - 9,
-              x2: pt.x + 9,
-              y2: pt.y + 9
+              x1: pt.x - 8,
+              y1: pt.y - 8,
+              x2: pt.x + 8,
+              y2: pt.y + 8
             };
 
-            // Selected building: ALWAYS visible
-            if (item.id === currentSelectedId) {
-              labelEl.style.display = 'block';
-              var approxW = Math.min(isHighZoom ? 140 : 100, item.name.length * (isHighZoom ? 6.5 : 5.5) + 14);
-              var approxH = isHighZoom ? 20 : 16;
-              var labelBox = {
-                x1: pt.x + 12,
-                y1: pt.y - approxH / 2,
-                x2: pt.x + 12 + approxW,
-                y2: pt.y + approxH / 2
-              };
-              placedBoxes.push(dotBox);
-              placedBoxes.push(labelBox);
-              return;
-            }
-
-            var approxW = Math.min(isHighZoom ? 140 : 100, item.name.length * (isHighZoom ? 6.5 : 5.5) + 14);
-            var approxH = isHighZoom ? 20 : 16;
+            var approxCharWidth = (zoom >= 18 ? 6.8 : zoom >= 17 ? 6.2 : 5.6);
+            var approxW = Math.min(parseInt(maxWidth, 10), item.name.length * approxCharWidth + 14);
+            var approxH = (zoom >= 18 ? 20 : zoom >= 17 ? 18 : 16);
             var labelBox = {
               x1: pt.x + 12,
               y1: pt.y - approxH / 2,
@@ -440,6 +518,15 @@ export const BuildingMapScreen: React.FC = () => {
               y2: pt.y + approxH / 2
             };
 
+            // Selected building: ALWAYS visible
+            if (item.id === currentSelectedId) {
+              labelEl.style.display = 'block';
+              placedBoxes.push(dotBox);
+              placedBoxes.push(labelBox);
+              return;
+            }
+
+            // Collision check against already placed dots and labels
             var collides = false;
             for (var i = 0; i < placedBoxes.length; i++) {
               var pb = placedBoxes[i];
@@ -460,7 +547,7 @@ export const BuildingMapScreen: React.FC = () => {
             }
           });
 
-          // Hide markers out of view
+          // Hide markers out of viewport
           markersList.forEach(function(item) {
             if (!bounds.contains(L.latLng(item.lat, item.lng)) && item.labelEl) {
               item.labelEl.style.display = 'none';
@@ -471,7 +558,7 @@ export const BuildingMapScreen: React.FC = () => {
         map.on('moveend zoomend', scheduleUpdateLabels);
 
         window.renderBuildingMarkers = function(list) {
-          markersLayer.clearLayers();
+          markersGroup.clearLayers();
           markersList = [];
 
           list.forEach(function(b) {
@@ -499,7 +586,7 @@ export const BuildingMapScreen: React.FC = () => {
                 building: b
               }));
             });
-            markersLayer.addLayer(m);
+            markersGroup.addLayer(m);
 
             markersList.push({
               id: b.id,
@@ -519,7 +606,7 @@ export const BuildingMapScreen: React.FC = () => {
               item.labelEl = document.getElementById('label-' + item.id);
             });
             updateLabels();
-          }, 60);
+          }, 80);
         };
 
         function selectMarker(buildingId) {

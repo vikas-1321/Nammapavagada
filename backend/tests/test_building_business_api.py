@@ -318,16 +318,70 @@ def test_building_and_business_archive_workflow(client):
     m_after = client.get("/api/buildings/map/markers").get_json()["data"]
     assert not any(m["id"] == bld_id for m in m_after)
 
-    # Verify business record still exists in archive
-    biz_check = client.get(f"/api/businesses/{biz_id}", headers=headers)
-    assert biz_check.status_code == 200
-    assert biz_check.get_json()["data"]["id"] == biz_id
+def test_point_deduplication_and_single_building_at_point(client):
+    """Verify that creating multiple buildings at the exact same point deduplicates to exactly one building."""
+    token = get_auth_token(client)
+    headers = {"Authorization": f"Bearer {token}"}
 
-    # 6. Archive Business
-    archive_biz_res = client.delete(f"/api/businesses/{biz_id}?archive=true", headers=headers)
+    test_lat = 14.10334
+    test_lng = 77.27665
+
+    # 1. Create first building at point
+    res1 = client.post("/api/buildings", json={
+        "name": "Point Building A",
+        "address": "Main Bazar",
+        "latitude": test_lat,
+        "longitude": test_lng,
+        "buildingType": "Commercial",
+    }, headers=headers)
+    assert res1.status_code == 201
+    b1_id = res1.get_json()["data"]["id"]
+
+    # 2. Attempt to create second building at the exact same point
+    res2 = client.post("/api/buildings", json={
+        "name": "Point Building A (Updated)",
+        "address": "Main Bazar Near Circle",
+        "latitude": test_lat,
+        "longitude": test_lng,
+        "buildingType": "Commercial",
+    }, headers=headers)
+    assert res2.status_code == 201
+    b2_id = res2.get_json()["data"]["id"]
+
+    # Crucial assertion: exactly the same building ID is updated, NO duplicate created!
+    assert b1_id == b2_id
+
+    # 3. Test business deduplication in the same building
+    biz1 = client.post("/api/businesses", json={
+        "buildingId": b1_id,
+        "name": "Pavagada Sweets",
+        "businessModel": "Retail",
+    }, headers=headers)
+    assert biz1.status_code == 201
+    biz1_id = biz1.get_json()["data"]["id"]
+
+    # Duplicate business registration
+    biz2 = client.post("/api/businesses", json={
+        "buildingId": b1_id,
+        "name": "Pavagada Sweets",
+        "businessModel": "Retail",
+    }, headers=headers)
+    assert biz2.status_code == 201
+    biz2_id = biz2.get_json()["data"]["id"]
+
+    assert biz1_id == biz2_id
+
+    # Verify business record still exists
+    biz_check = client.get(f"/api/businesses/{biz1_id}", headers=headers)
+    assert biz_check.status_code == 200
+    assert biz_check.get_json()["data"]["id"] == biz1_id
+
+    # 4. Archive Business
+    archive_biz_res = client.delete(f"/api/businesses/{biz1_id}?archive=true", headers=headers)
     assert archive_biz_res.status_code == 200
     assert archive_biz_res.get_json()["data"]["archived"] is True
 
     # Verify business status is ARCHIVED
-    biz_archived = client.get(f"/api/businesses/{biz_id}", headers=headers).get_json()["data"]
+    biz_archived = client.get(f"/api/businesses/{biz1_id}", headers=headers).get_json()["data"]
+    assert biz_archived["status"] == "ARCHIVED"
     assert biz_archived["status"] == "ARCHIVED"

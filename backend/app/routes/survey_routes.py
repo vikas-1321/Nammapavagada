@@ -47,8 +47,16 @@ def bulk_sync_surveys():
     synced_businesses = []
     errors = []
 
-    # 1. Sync buildings first
+    # 1. Sync buildings first (deduplicate within incoming batch by coordinate point)
+    deduped_buildings = {}
     for b_item in buildings_data:
+        lat = float(b_item.get("latitude") or 0)
+        lng = float(b_item.get("longitude") or 0)
+        coord_key = (round(lat, 5), round(lng, 5))
+        # Keep the latest draft for this point
+        deduped_buildings[coord_key] = b_item
+
+    for b_item in deduped_buildings.values():
         client_bld_id = b_item.get("id") or b_item.get("clientDraftId")
         try:
             # Check if building with this ID or Code already exists
@@ -79,8 +87,17 @@ def bulk_sync_surveys():
         except Exception as e:
             errors.append({"entity": "Building", "clientDraftId": client_bld_id, "error": str(e)})
 
-    # 2. Sync businesses (reconciling buildingId and floorId/unitId)
+    # 2. Sync businesses (deduplicate within incoming batch by buildingId + name)
+    deduped_businesses = {}
     for biz_item in businesses_data:
+        client_biz_id = biz_item.get("id") or biz_item.get("clientDraftId")
+        orig_bld_id = biz_item.get("buildingId") or biz_item.get("building_id")
+        resolved_bld_id = id_mapping.get(orig_bld_id, orig_bld_id)
+        biz_name = (biz_item.get("name") or "").strip().lower()
+        dedup_key = (resolved_bld_id, biz_name)
+        deduped_businesses[dedup_key] = biz_item
+
+    for biz_item in deduped_businesses.values():
         client_biz_id = biz_item.get("id") or biz_item.get("clientDraftId")
         # Reconcile buildingId if it was a draft ID
         orig_bld_id = biz_item.get("buildingId") or biz_item.get("building_id")
