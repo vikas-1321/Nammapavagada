@@ -264,6 +264,11 @@ export const BuildingMapScreen: React.FC = () => {
       <style>
         body, html, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #F8FAFC; overflow: hidden; }
 
+        /* Clean Map Tile Styling */
+        .leaflet-tile {
+          filter: saturate(92%) contrast(102%);
+        }
+
         /* Minimal GIS Circular Dot Marker */
         .gis-dot-wrapper {
           position: relative;
@@ -378,11 +383,10 @@ export const BuildingMapScreen: React.FC = () => {
         // Initialize Map centered on Pavagada
         var map = L.map('map', { zoomControl: false }).setView([${PAVAGADA_CENTER.lat}, ${PAVAGADA_CENTER.lng}], 15);
 
-        // Professional Clean Street Tile Layer (Carto Voyager clean pastel with OSM fallback)
-        var primaryTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-          subdomains: 'abcd',
+        // Official Free OpenStreetMap Tile Layer (No API key required)
+        var primaryTiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         });
         primaryTiles.addTo(map);
 
